@@ -228,7 +228,9 @@ def serve_frontend():
 @app.route("/health")
 def health():
     db_ok = False
+    db_info = "no DATABASE_URL configured"
     if DATABASE_URL:
+        db_info = f"DATABASE_URL set (len={len(DATABASE_URL)}, prefix={DATABASE_URL[:15]}...)"
         try:
             conn = get_db()
             cur = conn.cursor()
@@ -236,12 +238,20 @@ def health():
             cur.close()
             conn.close()
             db_ok = True
-        except:
-            pass
+            db_info = f"connected ({DATABASE_URL[:15]}...)"
+        except Exception as e:
+            db_info = f"connection failed: {str(e)[:100]}"
+    
+    # Debug env vars (without values)
+    pg_vars = {k: "set" if os.environ.get(k) else "not set" 
+               for k in ["DATABASE_URL", "PGHOST", "PGPORT", "PGUSER", "PGPASSWORD", "PGDATABASE", "POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB"]}
+    
     return jsonify({
         "status": "ok",
         "service": "lista-compra-v2",
         "database": "connected" if db_ok else "disconnected",
+        "db_info": db_info,
+        "pg_vars": pg_vars,
     })
 
 
