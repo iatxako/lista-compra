@@ -1,302 +1,240 @@
 #!/usr/bin/env python3
-"""Servidor web para la lista de la compra.
+"""
+Lista de la compra — v2 API (Railway-ready)
 
 Endpoints:
-  GET  /              -> HTML de la lista
   GET  /api/list      -> JSON de items
   POST /api/check     -> {"name": "...", "checked": bool}
   POST /api/add       -> {"name": "..."}
-  POST /api/sync      -> sincroniza checks a Notion
+  POST /api/remove    -> {"name": "..."}
+  POST /api/reset     -> vacía la lista
 
-Puerto: 8767 (evita conflicto con VNC :8765 y screenshot :8766)
+Autenticación: X-API-Key header (variable env API_KEY)
+Persistencia: Notion API directa (sin disco local)
 """
 
-import json
 import os
-import subprocess
-import sys
+import json
+import logging
 from datetime import datetime
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlparse, parse_qs
+from functools import wraps
 
-DATA_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.path.join(DATA_DIR, "data.json")
-HTML_FILE = os.path.join(DATA_DIR, "index.html")
-PORT = 8767
+import requests
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 
-# ── Load / Save data ──────────────────────────────────────────────
+# ── Config ──────────────────────────────────────────────────────────
 
-def load_data():
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE) as f:
-            return json.load(f)
-    return {"items": [], "updated": None}
+NOTION_TOKEN = os.environ.get("NOTION_TOKEN", "")
+NOTION_PAGE_ID = os.environ.get("NOTION_PAGE_ID", "37a13b5cd60a818681dbf9436bb2f339")
+API_KEY = os.environ.get("API_KEY", "")
+PORT = int(os.environ.get("PORT", 8767))
+DEBUG = os.environ.get("DEBUG", "").lower() in ("1", "true", "yes")
 
-def save_data(data):
-    data["updated"] = datetime.now().isoformat()
-    with open(DATA_FILE, "w") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+NOTION_VERSION = "2025-09-03"
+NOTION_HEADERS = {
+    "Authorization": f"Bearer {NOTION_TOKEN}",
+    "Notion-Version": NOTION_VERSION,
+    "Content-Type": "application/json",
+}
 
-def refresh_from_notion():
-    """Pull latest from Notion and merge with local checked state."""
-    data = load_data()
-    old_checked = {i["name"]: i.get("checked", False) for i in data.get("items", [])}
+app = Flask(__name__)
+CORS(app, resources={r"/api/*": {"origins": "*"}})
+logging.basicConfig(level=logging.DEBUG if DEBUG else logging.INFO)
+log = logging.getLogger("lista-compra")
 
-    # Read Notion page
-    token = None
-    env_path = "/opt/data/.env.secret"
-    if os.path.exists(env_path):
-        with open(env_path) as f:
-            for line in f:
-                if "NOTION_API_KEY" in line and "=" in line:
-                    token = line.split("=", 1)[1].strip()
-                    break
 
-    if not token:
-        return False
+# ── Auth decorator ──────────────────────────────────────────────────
 
-    import urllib.request
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Notion-Version": "2025-09-03",
-    }
+def require_api_key(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        key = request.headers.get("X-API-Key", "")
+        if API_KEY and key != API_KEY:
+            return jsonify({"error": "unauthorized"}), 401
+        return f(*args, **kwargs)
+    return decorated
 
-    page_id = "37a13b5cd60a818681dbf9436bb2f339"  # Lista de la compra
+
+# ── Notion helpers ──────────────────────────────────────────────────
+
+def notion_get(endpoint):
+    """GET from Notion API."""
+    url = f"https://api.notion.com/v1/{endpoint.lstrip('/')}"
+    resp = requests.get(url, headers=NOTION_HEADERS, timeout=15)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def notion_patch(endpoint, payload):
+    """PATCH to Notion API."""
+    url = f"https://api.notion.com/v1/{endpoint.lstrip('/')}"
+    resp = requests.patch(url, json=payload, headers=NOTION_HEADERS, timeout=15)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def fetch_markdown():
+    """Get current page markdown from Notion."""
     try:
-        req = urllib.request.Request(
-            f"https://api.notion.com/v1/pages/{page_id}/markdown",
-            headers=headers
-        )
-        with urllib.request.urlopen(req) as resp:
-            md = json.loads(resp.read())["markdown"]
+        data = notion_get(f"pages/{NOTION_PAGE_ID}/markdown")
+        return data.get("markdown", ""), None
     except Exception as e:
-        print(f"Error leyendo Notion: {e}")
-        return False
+        log.error("Error fetching Notion page: %s", e)
+        return None, str(e)
 
-    # Parse markdown table: | Item | Añadido | Estado |
+
+def parse_items_from_markdown(md):
+    """Parse markdown table into item list."""
     items = []
     for line in md.split("\n"):
-        if line.startswith("|") and "🕐" in line or "✅" in line:
+        if line.startswith("|") and ("🕐" in line or "✅" in line):
             parts = [p.strip() for p in line.split("|")]
             if len(parts) >= 4:
                 name = parts[1]
                 added = parts[2]
-                checked = "✅" in parts[3] or old_checked.get(name, False)
+                checked = "✅" in parts[3]
                 items.append({"name": name, "added": added, "checked": checked})
+    return items
 
-    if items:
-        data["items"] = items
-        save_data(data)
-        return True
-    return False
 
-def sync_to_notion(data):
-    """Write checked/unchecked state back to Notion."""
-    token = None
-    env_path = "/opt/data/.env.secret"
-    if os.path.exists(env_path):
-        with open(env_path) as f:
-            for line in f:
-                if "NOTION_API_KEY" in line and "=" in line:
-                    token = line.split("=", 1)[1].strip()
-                    break
+def build_markdown_table(items):
+    """Build markdown table from item list."""
+    today = datetime.now().strftime("%d %b")
+    lines = [
+        "## 🛒 Lista de la compra\n",
+        "| Item | Añadido | Estado |",
+        "|---|---|---|",
+    ]
+    for item in items:
+        status = "✅ Comprado" if item.get("checked") else "🕐 Pendiente"
+        lines.append(f"| {item['name']} | {item.get('added', today)} | {status} |")
+    lines.append("")
+    lines.append("---")
+    lines.append("*📌 Lista rodante — cuando compres algo avísame y lo marco.*")
+    lines.append("*🕐 Pendiente | ✅ Comprado*")
+    return "\n".join(lines)
 
-    if not token:
-        return False
 
-    import urllib.request
-    _, error = _build_notion_headers_and_page(token)
-    if error:
-        return False
-    return True
+def load_items():
+    """Load items directly from Notion (no cache)."""
+    md, err = fetch_markdown()
+    if err:
+        log.warning("Falling back to empty list: %s", err)
+        return []
+    return parse_items_from_markdown(md)
 
-def _build_notion_headers_and_page(token):
-    """Helper to get Notion headers and current page markdown."""
-    import urllib.request
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Notion-Version": "2025-09-03",
-        "Content-Type": "application/json",
+
+def save_items(items):
+    """Write items back to Notion."""
+    md, err = fetch_markdown()
+    if err:
+        return False, err
+    new_md = build_markdown_table(items)
+    payload = {
+        "type": "replace_content_range",
+        "replace_content_range": {
+            "content": new_md,
+            "content_range": md,
+        },
     }
-    page_id = "37a13b5cd60a818681dbf9436bb2f339"
-    req = urllib.request.Request(
-        f"https://api.notion.com/v1/pages/{page_id}/markdown",
-        headers=headers
-    )
     try:
-        with urllib.request.urlopen(req) as resp:
-            current = json.loads(resp.read())["markdown"]
-        return headers, current
+        notion_patch(f"pages/{NOTION_PAGE_ID}/markdown", payload)
+        return True, None
     except Exception as e:
-        return None, str(e)
-
-# ── HTTP Handler ──────────────────────────────────────────────────
-
-class ShoppingListHandler(BaseHTTPRequestHandler):
-
-    def do_GET(self):
-        parsed = urlparse(self.path)
-        path = parsed.path
-
-        if path == "/":
-            self._serve_html()
-        elif path == "/api/list":
-            self._serve_json(load_data())
-        else:
-            self._send(404, {"error": "not found"})
-
-    def do_POST(self):
-        parsed = urlparse(self.path)
-        path = parsed.path
-
-        length = int(self.headers.get("Content-Length", 0))
-        body = self.rfile.read(length).decode() if length else "{}"
-        try:
-            payload = json.loads(body)
-        except json.JSONDecodeError:
-            self._send(400, {"error": "invalid json"})
-            return
-
-        data = load_data()
-
-        if path == "/api/check":
-            name = payload.get("name", "")
-            checked = payload.get("checked", False)
-            for item in data["items"]:
-                if item["name"] == name:
-                    item["checked"] = checked
-                    break
-            save_data(data)
-            self._serve_json({"ok": True, "item": {"name": name, "checked": checked}})
-
-        elif path == "/api/add":
-            name = payload.get("name", "").strip()
-            if name:
-                data["items"].append({
-                    "name": name,
-                    "added": datetime.now().strftime("%d %b"),
-                    "checked": False
-                })
-                save_data(data)
-            self._serve_json({"ok": True})
-
-        elif path == "/api/remove":
-            name = payload.get("name", "")
-            data["items"] = [i for i in data["items"] if i["name"] != name]
-            save_data(data)
-            self._serve_json({"ok": True})
-
-        elif path == "/api/refresh":
-            ok = refresh_from_notion()
-            self._serve_json({"ok": ok})
-
-        elif path == "/api/sync":
-            self._sync_to_notion(data)
-
-        elif path == "/api/reset":
-            data["items"] = []
-            save_data(data)
-            self._serve_json({"ok": True})
-
-        else:
-            self._send(404, {"error": "not found"})
-
-    def _sync_to_notion(self, data):
-        """Build markdown table and write back to Notion."""
-        today = datetime.now().strftime("%d %b")
-        lines = ["## 🛒 Lista de la compra\n", "| Item | Añadido | Estado |"]
-        lines.append("|---|---|---|")
-        for item in data["items"]:
-            status = "✅ Comprado" if item.get("checked") else "🕐 Pendiente"
-            lines.append(f"| {item['name']} | {item.get('added', today)} | {status} |")
-        lines.append("")
-        lines.append("---")
-        lines.append("*📌 Lista rodante — cuando compres algo avísame y lo marco.*")
-        lines.append("*🕐 Pendiente | ✅ Comprado*")
-        markdown = "\n".join(lines)
-
-        token = None
-        with open("/opt/data/.env.secret") as f:
-            for line in f:
-                if "NOTION_API_KEY" in line and "=" in line:
-                    token = line.split("=", 1)[1].strip()
-                    break
-
-        if not token:
-            self._send(500, {"error": "no token"})
-            return
-
-        import urllib.request
-        headers, current_md = _build_notion_headers_and_page(token)
-        if not headers:
-            self._send(500, {"error": current_md})
-            return
-
-        payload = {
-            "type": "replace_content_range",
-            "replace_content_range": {
-                "content": markdown,
-                "content_range": current_md
-            }
-        }
-        page_id = "37a13b5cd60a818681dbf9436bb2f339"
-        req = urllib.request.Request(
-            f"https://api.notion.com/v1/pages/{page_id}/markdown",
-            data=json.dumps(payload).encode(),
-            headers=headers,
-            method="PATCH"
-        )
-        try:
-            with urllib.request.urlopen(req) as resp:
-                self._serve_json({"ok": True})
-        except Exception as e:
-            self._send(500, {"error": str(e)})
-
-    # ── Helpers ──────────────────────────────────────────────────
-
-    def _serve_html(self):
-        if os.path.exists(HTML_FILE):
-            with open(HTML_FILE) as f:
-                html = f.read()
-            self._send(200, html, content_type="text/html; charset=utf-8")
-        else:
-            self._send(500, {"error": "index.html not found"})
-
-    def _serve_json(self, data):
-        self._send(200, data, content_type="application/json")
-
-    def _send(self, code, content, content_type="application/json"):
-        self.send_response(code)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
-        self.end_headers()
-
-        if isinstance(content, str):
-            self.wfile.write(content.encode())
-        elif isinstance(content, dict):
-            self.wfile.write(json.dumps(content, ensure_ascii=False).encode())
-
-    def do_OPTIONS(self):
-        self._send(204, "")
-
-    def log_message(self, format, *args):
-        pass  # quieter
+        log.error("Error saving to Notion: %s", e)
+        return False, str(e)
 
 
-# ── Main ──────────────────────────────────────────────────────────
+# ── API Routes ──────────────────────────────────────────────────────
+
+@app.route("/api/list")
+def api_list():
+    items = load_items()
+    return jsonify({"items": items, "updated": datetime.now().isoformat()})
+
+
+@app.route("/api/check", methods=["POST"])
+@require_api_key
+def api_check():
+    body = request.get_json(silent=True) or {}
+    name = body.get("name", "")
+    checked = body.get("checked", False)
+
+    items = load_items()
+    for item in items:
+        if item["name"] == name:
+            item["checked"] = checked
+            break
+
+    ok, err = save_items(items)
+    if not ok:
+        return jsonify({"error": err}), 500
+    return jsonify({"ok": True, "item": {"name": name, "checked": checked}})
+
+
+@app.route("/api/add", methods=["POST"])
+@require_api_key
+def api_add():
+    body = request.get_json(silent=True) or {}
+    name = body.get("name", "").strip()
+    if not name:
+        return jsonify({"error": "name required"}), 400
+
+    items = load_items()
+    # Avoid duplicates
+    if any(i["name"].lower() == name.lower() for i in items):
+        return jsonify({"ok": True, "duplicate": True})
+
+    items.append({
+        "name": name,
+        "added": datetime.now().strftime("%d %b"),
+        "checked": False,
+    })
+
+    ok, err = save_items(items)
+    if not ok:
+        return jsonify({"error": err}), 500
+    return jsonify({"ok": True})
+
+
+@app.route("/api/remove", methods=["POST"])
+@require_api_key
+def api_remove():
+    body = request.get_json(silent=True) or {}
+    name = body.get("name", "")
+
+    items = load_items()
+    items = [i for i in items if i["name"] != name]
+
+    ok, err = save_items(items)
+    if not ok:
+        return jsonify({"error": err}), 500
+    return jsonify({"ok": True})
+
+
+@app.route("/api/reset", methods=["POST"])
+@require_api_key
+def api_reset():
+    ok, err = save_items([])
+    if not ok:
+        return jsonify({"error": err}), 500
+    return jsonify({"ok": True})
+
+
+# ── Health check ────────────────────────────────────────────────────
+
+@app.route("/health")
+def health():
+    return jsonify({"status": "ok", "service": "lista-compra-v2"})
+
+
+# ── Main ────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    # Refresh from Notion on start
-    print("🔃 Sincronizando desde Notion...")
-    refresh_from_notion()
-
-    server = HTTPServer(("0.0.0.0", PORT), ShoppingListHandler)
-    print(f"🛒 Lista de la compra activa en http://0.0.0.0:{PORT}")
-    print(f"   Accede desde el móvil: http://<nas-ip>:{PORT}")
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        print("\n👋 Apagando servidor")
-        server.shutdown()
+    if not NOTION_TOKEN:
+        log.warning("NOTION_TOKEN not set — API will return empty lists")
+    if not API_KEY:
+        log.warning("API_KEY not set — endpoints are unprotected")
+    log.info("Starting on port %d (debug=%s)", PORT, DEBUG)
+    app.run(host="0.0.0.0", port=PORT, debug=DEBUG)

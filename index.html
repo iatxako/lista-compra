@@ -202,17 +202,82 @@
     pointer-events: none;
   }
   .toast.show { opacity: 1; }
+
+  /* Settings popup */
+  .settings-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 200;
+    justify-content: center;
+    align-items: center;
+  }
+  .settings-overlay.show { display: flex; }
+  .settings-card {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 24px;
+    width: 90%;
+    max-width: 400px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+  }
+  .settings-card h3 { margin-bottom: 16px; }
+  .settings-card label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: var(--muted);
+  }
+  .settings-card input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.95rem;
+    margin-bottom: 12px;
+    box-sizing: border-box;
+  }
+  .settings-card .btn-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .settings-card .btn-row button {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-save { background: var(--blue); color: white; }
+  .btn-close { background: #e9ecef; color: var(--text); }
+  .settings-icon {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    background: none;
+    border: none;
+    font-size: 1.3rem;
+    cursor: pointer;
+    opacity: 0.5;
+    transition: opacity 0.15s;
+    z-index: 50;
+  }
+  .settings-icon:active { opacity: 1; }
 </style>
 </head>
 <body>
 
 <div class="toast" id="toast"></div>
+<button class="settings-icon" onclick="showSettings()">⚙️</button>
 
 <h1>🛒 Lista</h1>
 <div class="subtitle" id="subtitle">Cargando...</div>
 
 <div class="actions">
-  <button class="btn-sync" onclick="syncNotion()">📤 Sincronizar</button>
   <button class="btn-refresh" onclick="loadList()">🔄 Recargar</button>
   <button class="btn-reset" onclick="resetList()">🗑️ Vaciar</button>
 </div>
@@ -224,8 +289,53 @@
   <button onclick="addItem()">Añadir</button>
 </div>
 
+<!-- Settings -->
+<div class="settings-overlay" id="settingsOverlay">
+  <div class="settings-card">
+    <h3>⚙️ Configuración</h3>
+    <label>URL del servidor</label>
+    <input type="url" id="settingApiUrl" placeholder="https://api.ejemplo.com">
+    <label>Clave de acceso</label>
+    <input type="password" id="settingApiKey" placeholder="API Key">
+    <div class="btn-row">
+      <button class="btn-close" onclick="hideSettings()">Cancelar</button>
+      <button class="btn-save" onclick="saveSettings()">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <script>
-const API = '';
+// ── Config ────────────────────────────────────────────────────────
+// Default: same origin (local dev). Override via settings (saved to localStorage)
+const API = localStorage.getItem('lista_api_url') || '';
+const API_KEY = localStorage.getItem('lista_api_key') || '';
+
+function apiHeaders() {
+  const h = {'Content-Type': 'application/json'};
+  if (API_KEY) h['X-API-Key'] = API_KEY;
+  return h;
+}
+
+// ── Settings UI ───────────────────────────────────────────────────
+function showSettings() {
+  document.getElementById('settingApiUrl').value = localStorage.getItem('lista_api_url') || '';
+  document.getElementById('settingApiKey').value = localStorage.getItem('lista_api_key') || '';
+  document.getElementById('settingsOverlay').classList.add('show');
+}
+function hideSettings() {
+  document.getElementById('settingsOverlay').classList.remove('show');
+}
+function saveSettings() {
+  const url = document.getElementById('settingApiUrl').value.trim();
+  const key = document.getElementById('settingApiKey').value.trim();
+  if (url) localStorage.setItem('lista_api_url', url);
+  else localStorage.removeItem('lista_api_url');
+  if (key) localStorage.setItem('lista_api_key', key);
+  else localStorage.removeItem('lista_api_key');
+  hideSettings();
+  toast('⚙️ Configuración guardada');
+  loadList();
+}
 
 // ── Toast ────────────────────────────────────────────────────────
 function toast(msg) {
@@ -239,6 +349,7 @@ function toast(msg) {
 async function loadList() {
   try {
     const res = await fetch(`${API}/api/list`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     render(data.items || []);
     const total = data.items.length;
@@ -246,6 +357,7 @@ async function loadList() {
     document.getElementById('subtitle').textContent =
       total > 0 ? `${done} de ${total} comprados` : 'Lista vacía';
   } catch (e) {
+    document.getElementById('subtitle').textContent = 'Error de conexión';
     toast('Error al cargar');
   }
 }
@@ -254,7 +366,7 @@ async function loadList() {
 function render(items) {
   const container = document.getElementById('list');
   if (!items.length) {
-    container.innerHTML = `<div class="empty"><div class="emoji">🛒</div>Lista vacía<br><span style="font-size:0.85rem">Añade items abajo o pídelos por Telegram</span></div>`;
+    container.innerHTML = `<div class="empty"><div class="emoji">🛒</div>Lista vacía<br><span style="font-size:0.85rem">Añade items abajo</span></div>`;
     return;
   }
   container.innerHTML = items.map((item, idx) => `
@@ -282,7 +394,7 @@ async function toggleCheck(idx) {
   try {
     await fetch(`${API}/api/check`, {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: apiHeaders(),
       body: JSON.stringify({name: item.name, checked: item.checked})
     });
     loadList();
@@ -299,12 +411,14 @@ async function addItem() {
   input.value = '';
   input.focus();
   try {
-    await fetch(`${API}/api/add`, {
+    const res = await fetch(`${API}/api/add`, {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: apiHeaders(),
       body: JSON.stringify({name})
     });
-    toast('✓ Añadido');
+    const data = await res.json();
+    if (data.duplicate) toast('⚠️ Ya está en la lista');
+    else toast('✓ Añadido');
     loadList();
   } catch (e) {
     toast('Error al añadir');
@@ -319,7 +433,7 @@ async function removeItem(idx) {
   try {
     await fetch(`${API}/api/remove`, {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: apiHeaders(),
       body: JSON.stringify({name: item.name})
     });
     loadList();
@@ -328,26 +442,14 @@ async function removeItem(idx) {
   }
 }
 
-// ── Sync to Notion ───────────────────────────────────────────────
-async function syncNotion() {
-  try {
-    const res = await fetch(`${API}/api/sync`, {method: 'POST'});
-    const data = await res.json();
-    if (data.ok) {
-      toast('✅ Sincronizado a Notion');
-    } else {
-      toast('Error en sincronización');
-    }
-  } catch (e) {
-    toast('Error de conexión');
-  }
-}
-
 // ── Reset list ───────────────────────────────────────────────────
 async function resetList() {
   if (!confirm('¿Vaciar toda la lista?')) return;
   try {
-    await fetch(`${API}/api/reset`, {method: 'POST'});
+    await fetch(`${API}/api/reset`, {
+      method: 'POST',
+      headers: apiHeaders()
+    });
     toast('🗑️ Lista vaciada');
     loadList();
   } catch (e) {

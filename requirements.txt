@@ -1,3 +1,4 @@
-# Sin dependencias externas — Python stdlib es suficiente
-# Para desarrollo:
-# pip install pytest
+flask>=3.0
+flask-cors>=4.0
+requests>=2.31
+gunicorn>=21.2

@@ -1,57 +1,89 @@
-# Lista de la Compra — NAS Shopping List
+# Lista de la Compra — v2
 
-Web app ligera para gestionar la lista de la compra desde el móvil, con sincronización bidireccional con Notion y control por Telegram.
+App web para gestionar la lista de la compra desde cualquier sitio.
 
-## Stack
+## Stack v2
 
-- **Backend:** Python 3 (http.server — sin dependencias externas)
-- **Frontend:** HTML + JS vanilla (sin frameworks)
-- **Persistencia:** JSON local + Notion API (sync)
-- **Control:** Telegram (vía Hermes Agent)
+- **Frontend:** HTML + JS vanilla (GitHub Pages)
+- **Backend:** Python Flask + Gunicorn (Railway)
+- **Persistencia:** Notion API directa (sin disco local)
+- **Auth:** API Key via cabecera `X-API-Key`
+- **Control:** Telegram vía Hermes Agent
 
-## Requisitos
+## Arquitectura
 
-- Python 3.10+
-- Clave de API de Notion (para sincronización)
+```
+                            ┌──────────────────┐
+  Usuario (móvil) ────────▶│  GitHub Pages    │
+                            │  (index.html)    │
+                            └────────┬─────────┘
+                                     │ API calls (con X-API-Key)
+                            ┌────────▼─────────┐
+                            │  Railway         │
+                            │  (server.py)     │
+                            └────────┬─────────┘
+                                     │ Notion API
+                            ┌────────▼─────────┐
+                            │  Notion Page     │
+                            │  (lista compra)  │
+                            └──────────────────┘
+```
 
-## Arranque rápido
+## Despliegue
+
+### Frontend (GitHub Pages)
+
+El `index.html` se sirve desde GitHub Pages automáticamente.
+Configurar en Settings → Pages → Source: Deploy from branch `main`, root `/`.
+
+### Backend (Railway)
+
+1. Crear proyecto en Railway desde el repo
+2. Railway detecta `Procfile` y `railway.json` automáticamente
+3. Añadir variables de entorno:
+
+| Variable | Descripción |
+|----------|-------------|
+| `NOTION_TOKEN` | Token de integración de Notion |
+| `NOTION_PAGE_ID` | ID de la página de la lista (default: 37a13b5c...) |
+| `API_KEY` | Clave para proteger los endpoints |
+
+4. Copiar la URL del backend (ej: `https://lista-compra.up.railway.app`)
+
+### Configurar frontend
+
+Abrir la app → ⚙️ (esquina superior derecha) → pegar URL del backend + API Key.
+
+O pasar como query params:
+```
+https://iatxako.github.io/lista-compra/?api_url=https://lista-compra.up.railway.app&api_key=...
+
+```
+
+## Desarrollo local
 
 ```bash
-python3 server.py
-# Abrir en el navegador: http://localhost:8767
+pip install -r requirements.txt
+NOTION_TOKEN=... API_KEY=... python3 server.py
+# Abrir: http://localhost:8767
 ```
 
-## APIs
+## API
 
-| Endpoint | Método | Descripción |
-|---|---|---|
-| `/` | GET | Interfaz web |
-| `/api/list` | GET | Lista actual en JSON |
-| `/api/check` | POST | Marcar/desmarcar item |
-| `/api/add` | POST | Añadir item |
-| `/api/remove` | POST | Eliminar item |
-| `/api/refresh` | POST | Recargar desde Notion |
-| `/api/sync` | POST | Sincronizar cambios a Notion |
-| `/api/reset` | POST | Vaciar lista |
+| Endpoint | Método | Auth | Descripción |
+|----------|--------|------|-------------|
+| `/api/list` | GET | No | Lista actual en JSON |
+| `/api/check` | POST | Sí | Marcar/desmarcar item |
+| `/api/add` | POST | Sí | Añadir item |
+| `/api/remove` | POST | Sí | Eliminar item |
+| `/api/reset` | POST | Sí | Vaciar lista |
+| `/health` | GET | No | Health check |
 
-## Estructura
+## v2 — Cambios respecto a v0.1
 
-```
-.
-├── server.py        # Servidor web + API REST
-├── index.html       # Interfaz mobile-first
-├── data.json        # Estado local (no versionado)
-├── LICENSE
-└── README.md
-```
-
-## v0.1.0 — Prototipo funcional
-
-- Lista con checkboxes táctiles
-- Añadir items desde la web
-- Sincronización manual con Notion
-- Control por Telegram vía Hermes Agent
-
-## Próximos pasos (v2)
-
-Ver [Hermes #40](https://app.plane.so/txako/projects/3f7aacda-d426-4b7e-9ae3-397945c37523/issues/40) para la definición de v2.
+- ✅ Backend en Railway (accesible desde cualquier sitio)
+- ✅ Frontend en GitHub Pages (CDN global)
+- ✅ Persistencia directa a Notion (sin `data.json`)
+- ✅ Auth con API Key
+- ✅ Sin puertos abiertos en el NAS
+- ✅ Sin dependencias del ecosistema local
