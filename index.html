@@ -307,8 +307,17 @@
 <script>
 // ── Config ────────────────────────────────────────────────────────
 // Por defecto: mismo origen (Railway sirve frontend y API juntos)
-// Si usas frontend separado, configura la URL desde ⚙️ (se guarda en localStorage)
+// La API Key se puede pasar como ?api_key=... en la URL, o desde ⚙️
 const API = localStorage.getItem('lista_api_url') || '';
+
+// Leer API key: primero de URL, luego de localStorage
+const urlParams = new URLSearchParams(window.location.search);
+const urlApiKey = urlParams.get('api_key');
+if (urlApiKey) {
+  localStorage.setItem('lista_api_key', urlApiKey);
+  // Limpiar URL sin recargar
+  window.history.replaceState({}, '', window.location.pathname);
+}
 const API_KEY = localStorage.getItem('lista_api_key') || '';
 
 function apiHeaders() {
