@@ -1,0 +1,3 @@
+# Sin dependencias externas — Python stdlib es suficiente
+# Para desarrollo:
+# pip install pytest

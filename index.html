@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>🛒 Lista de la compra</title>
+<style>
+  :root {
+    --bg: #f5f5f0;
+    --card: #ffffff;
+    --text: #1a1a1a;
+    --muted: #888;
+    --green: #2b8a3e;
+    --red: #e03131;
+    --blue: #1971c2;
+    --border: #dee2e6;
+    --shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 16px;
+    padding-bottom: 100px;
+    max-width: 600px;
+    margin: 0 auto;
+    -webkit-tap-highlight-color: transparent;
+  }
+  h1 {
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .subtitle {
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin-bottom: 20px;
+  }
+  .item {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 8px;
+    box-shadow: var(--shadow);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    transition: opacity 0.2s, transform 0.15s;
+    cursor: pointer;
+    user-select: none;
+    min-height: 52px;
+  }
+  .item:active {
+    transform: scale(0.98);
+  }
+  .item.checked {
+    opacity: 0.55;
+  }
+  .item.checked .item-name {
+    text-decoration: line-through;
+    color: var(--muted);
+  }
+  .checkbox {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    border: 2.5px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+    transition: all 0.15s;
+  }
+  .item.checked .checkbox {
+    background: var(--green);
+    border-color: var(--green);
+    color: white;
+  }
+  .item-name {
+    flex: 1;
+    font-size: 1.05rem;
+    font-weight: 500;
+  }
+  .item-added {
+    color: var(--muted);
+    font-size: 0.75rem;
+    flex-shrink: 0;
+  }
+  .delete-btn {
+    background: none;
+    border: none;
+    color: var(--red);
+    font-size: 1.2rem;
+    padding: 4px 8px;
+    cursor: pointer;
+    opacity: 0.5;
+    transition: opacity 0.15s;
+  }
+  .delete-btn:active { opacity: 1; }
+
+  /* Add form */
+  .add-form {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--card);
+    padding: 12px 16px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+    box-shadow: 0 -2px 12px rgba(0,0,0,0.1);
+    display: flex;
+    gap: 8px;
+    max-width: 600px;
+    margin: 0 auto;
+  }
+  .add-form input {
+    flex: 1;
+    padding: 12px 16px;
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .add-form input:focus {
+    border-color: var(--blue);
+  }
+  .add-form button {
+    background: var(--blue);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 12px 20px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .add-form button:active {
+    background: #1558b0;
+  }
+
+  /* Action bar */
+  .actions {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .actions button {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .btn-sync {
+    background: var(--green);
+    color: white;
+  }
+  .btn-sync:active { background: #1e6b2f; }
+  .btn-refresh {
+    background: #e9ecef;
+    color: var(--text);
+  }
+  .btn-refresh:active { background: #ced4da; }
+  .btn-reset {
+    background: #fff5f5;
+    color: var(--red);
+  }
+  .btn-reset:active { background: #ffe3e3; }
+
+  /* Empty state */
+  .empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--muted);
+  }
+  .empty .emoji { font-size: 3rem; margin-bottom: 12px; }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #333;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    opacity: 0;
+    transition: opacity 0.3s;
+    z-index: 100;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="toast" id="toast"></div>
+
+<h1>🛒 Lista</h1>
+<div class="subtitle" id="subtitle">Cargando...</div>
+
+<div class="actions">
+  <button class="btn-sync" onclick="syncNotion()">📤 Sincronizar</button>
+  <button class="btn-refresh" onclick="loadList()">🔄 Recargar</button>
+  <button class="btn-reset" onclick="resetList()">🗑️ Vaciar</button>
+</div>
+
+<div id="list"></div>
+
+<div class="add-form">
+  <input type="text" id="newItem" placeholder="Añadir item..." autocomplete="off">
+  <button onclick="addItem()">Añadir</button>
+</div>
+
+<script>
+const API = '';
+
+// ── Toast ────────────────────────────────────────────────────────
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2000);
+}
+
+// ── Load ─────────────────────────────────────────────────────────
+async function loadList() {
+  try {
+    const res = await fetch(`${API}/api/list`);
+    const data = await res.json();
+    render(data.items || []);
+    const total = data.items.length;
+    const done = data.items.filter(i => i.checked).length;
+    document.getElementById('subtitle').textContent =
+      total > 0 ? `${done} de ${total} comprados` : 'Lista vacía';
+  } catch (e) {
+    toast('Error al cargar');
+  }
+}
+
+// ── Render ───────────────────────────────────────────────────────
+function render(items) {
+  const container = document.getElementById('list');
+  if (!items.length) {
+    container.innerHTML = `<div class="empty"><div class="emoji">🛒</div>Lista vacía<br><span style="font-size:0.85rem">Añade items abajo o pídelos por Telegram</span></div>`;
+    return;
+  }
+  container.innerHTML = items.map((item, idx) => `
+    <div class="item ${item.checked ? 'checked' : ''}" data-index="${idx}" onclick="toggleCheck(${idx})">
+      <div class="checkbox">${item.checked ? '✓' : ''}</div>
+      <span class="item-name">${escapeHtml(item.name)}</span>
+      <span class="item-added">${item.added || ''}</span>
+      <button class="delete-btn" onclick="event.stopPropagation(); removeItem(${idx})">✕</button>
+    </div>
+  `).join('');
+}
+
+function escapeHtml(text) {
+  const d = document.createElement('div');
+  d.textContent = text;
+  return d.innerHTML;
+}
+
+// ── Toggle check ─────────────────────────────────────────────────
+async function toggleCheck(idx) {
+  const items = getCurrentItems();
+  if (!items[idx]) return;
+  const item = items[idx];
+  item.checked = !item.checked;
+  try {
+    await fetch(`${API}/api/check`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({name: item.name, checked: item.checked})
+    });
+    loadList();
+  } catch (e) {
+    toast('Error al marcar');
+  }
+}
+
+// ── Add item ─────────────────────────────────────────────────────
+async function addItem() {
+  const input = document.getElementById('newItem');
+  const name = input.value.trim();
+  if (!name) return;
+  input.value = '';
+  input.focus();
+  try {
+    await fetch(`${API}/api/add`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({name})
+    });
+    toast('✓ Añadido');
+    loadList();
+  } catch (e) {
+    toast('Error al añadir');
+  }
+}
+
+// ── Remove item ──────────────────────────────────────────────────
+async function removeItem(idx) {
+  const items = getCurrentItems();
+  const item = items[idx];
+  if (!item) return;
+  try {
+    await fetch(`${API}/api/remove`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({name: item.name})
+    });
+    loadList();
+  } catch (e) {
+    toast('Error al eliminar');
+  }
+}
+
+// ── Sync to Notion ───────────────────────────────────────────────
+async function syncNotion() {
+  try {
+    const res = await fetch(`${API}/api/sync`, {method: 'POST'});
+    const data = await res.json();
+    if (data.ok) {
+      toast('✅ Sincronizado a Notion');
+    } else {
+      toast('Error en sincronización');
+    }
+  } catch (e) {
+    toast('Error de conexión');
+  }
+}
+
+// ── Reset list ───────────────────────────────────────────────────
+async function resetList() {
+  if (!confirm('¿Vaciar toda la lista?')) return;
+  try {
+    await fetch(`${API}/api/reset`, {method: 'POST'});
+    toast('🗑️ Lista vaciada');
+    loadList();
+  } catch (e) {
+    toast('Error');
+  }
+}
+
+// ── Helper ──────────────────────────────────────────────────────
+function getCurrentItems() {
+  const els = document.querySelectorAll('.item');
+  return Array.from(els).map(el => ({
+    name: el.querySelector('.item-name').textContent,
+    checked: el.classList.contains('checked'),
+    added: el.querySelector('.item-added').textContent
+  }));
+}
+
+// ── Keyboard shortcut ────────────────────────────────────────────
+document.getElementById('newItem').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') addItem();
+});
+
+// ── Init ─────────────────────────────────────────────────────────
+loadList();
+// Auto-refresh every 30s
+setInterval(loadList, 30000);
+</script>
+</body>
+</html>
