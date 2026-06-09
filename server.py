@@ -227,6 +227,11 @@ def serve_frontend():
 
 @app.route("/health")
 def health():
+    # Debug: expose raw DATABASE_URL (masked)
+    raw_url = os.environ.get("DATABASE_URL", "")
+    import re
+    masked = re.sub(r'(://[^:]+:)([^@]+)(@)', r'\1***\3', raw_url[:120]) if raw_url else "(empty)"
+    
     db_ok = False
     db_info = "no DATABASE_URL configured"
     if DATABASE_URL:
@@ -251,6 +256,7 @@ def health():
         "service": "lista-compra-v2",
         "database": "connected" if db_ok else "disconnected",
         "db_info": db_info,
+        "db_url_debug": masked,
         "pg_vars": pg_vars,
     })
 
