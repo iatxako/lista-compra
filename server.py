@@ -279,6 +279,8 @@ def _test_notion_connection():
 if __name__ == "__main__":
     if not NOTION_TOKEN:
         log.warning("NOTION_TOKEN not set — API will return empty lists")
+    else:
+        log.info("NOTION_TOKEN configured: len=%d prefix=%s", len(NOTION_TOKEN), NOTION_TOKEN[:6])
     if not API_KEY:
         log.warning("API_KEY not set — endpoints are unprotected")
     log.info("Starting on port %d (debug=%s)", PORT, DEBUG)
