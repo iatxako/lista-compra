@@ -27,7 +27,22 @@ from flask_cors import CORS
 
 # ── Config ──────────────────────────────────────────────────────────
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "")
+# Try DATABASE_URL first, then build from individual PG* env vars
+DATABASE_URL = (
+    os.environ.get("DATABASE_URL")
+    or ""
+)
+
+# Fallback: build from individual Postgres env vars
+if not DATABASE_URL:
+    pg_host = os.environ.get("PGHOST")
+    pg_port = os.environ.get("PGPORT")
+    pg_user = os.environ.get("PGUSER") or os.environ.get("POSTGRES_USER")
+    pg_pass = os.environ.get("PGPASSWORD") or os.environ.get("POSTGRES_PASSWORD")
+    pg_db = os.environ.get("PGDATABASE") or os.environ.get("POSTGRES_DB")
+    if all([pg_host, pg_port, pg_user, pg_pass, pg_db]):
+        DATABASE_URL = f"postgresql://{pg_user}:{pg_pass}@{pg_host}:{pg_port}/{pg_db}"
+
 API_KEY = os.environ.get("API_KEY", "")
 PORT = int(os.environ.get("PORT", 8767))
 DEBUG = os.environ.get("DEBUG", "").lower() in ("1", "true", "yes")
