@@ -4,7 +4,7 @@ App web para gestionar la lista de la compra desde cualquier sitio.
 
 ## Stack v2
 
-- **Frontend:** HTML + JS vanilla (GitHub Pages)
+- **Frontend:** HTML + JS vanilla (servido por el backend en Railway)
 - **Backend:** Python Flask + Gunicorn (Railway)
 - **Persistencia:** Notion API directa (sin disco local)
 - **Auth:** API Key via cabecera `X-API-Key`
@@ -14,33 +14,25 @@ App web para gestionar la lista de la compra desde cualquier sitio.
 
 ```
                             ┌──────────────────┐
-  Usuario (móvil) ────────▶│  GitHub Pages    │
-                            │  (index.html)    │
-                            └────────┬─────────┘
-                                     │ API calls (con X-API-Key)
-                            ┌────────▼─────────┐
-                            │  Railway         │
-                            │  (server.py)     │
+  Usuario (móvil) ────────▶│  Railway          │
+                            │  (server.py)      │
+                            │  ├── / → frontend │
+                            │  └── /api/* → API │
                             └────────┬─────────┘
                                      │ Notion API
                             ┌────────▼─────────┐
-                            │  Notion Page     │
-                            │  (lista compra)  │
+                            │  Notion Page      │
+                            │  (lista compra)   │
                             └──────────────────┘
 ```
 
 ## Despliegue
 
-### Frontend (GitHub Pages)
+### Railway (backend + frontend)
 
-El `index.html` se sirve desde GitHub Pages automáticamente.
-Configurar en Settings → Pages → Source: Deploy from branch `main`, root `/`.
-
-### Backend (Railway)
-
-1. Crear proyecto en Railway desde el repo
+1. Crear proyecto en Railway desde el repo `iatxako/lista-compra`
 2. Railway detecta `Procfile` y `railway.json` automáticamente
-3. Añadir variables de entorno:
+3. Añadir variables de entorno en Railway Dashboard:
 
 | Variable | Descripción |
 |----------|-------------|
@@ -48,17 +40,10 @@ Configurar en Settings → Pages → Source: Deploy from branch `main`, root `/`
 | `NOTION_PAGE_ID` | ID de la página de la lista (default: 37a13b5c...) |
 | `API_KEY` | Clave para proteger los endpoints |
 
-4. Copiar la URL del backend (ej: `https://lista-compra.up.railway.app`)
+4. La app se sirve en `https://lista-compra.up.railway.app`
 
-### Configurar frontend
-
-Abrir la app → ⚙️ (esquina superior derecha) → pegar URL del backend + API Key.
-
-O pasar como query params:
-```
-https://iatxako.github.io/lista-compra/?api_url=https://lista-compra.up.railway.app&api_key=...
-
-```
+La API Key se configura en Railway como variable de entorno `API_KEY`.
+Si quieres mantener privacidad extra, añade `?api_key=...` en la URL al compartir.
 
 ## Desarrollo local
 
@@ -82,7 +67,7 @@ NOTION_TOKEN=... API_KEY=... python3 server.py
 ## v2 — Cambios respecto a v0.1
 
 - ✅ Backend en Railway (accesible desde cualquier sitio)
-- ✅ Frontend en GitHub Pages (CDN global)
+- ✅ Frontend servido por el mismo Railway (sin CORS, sin servicios extra)
 - ✅ Persistencia directa a Notion (sin `data.json`)
 - ✅ Auth con API Key
 - ✅ Sin puertos abiertos en el NAS

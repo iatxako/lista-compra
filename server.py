@@ -20,7 +20,7 @@ from datetime import datetime
 from functools import wraps
 
 import requests
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 
 # ── Config ──────────────────────────────────────────────────────────
@@ -37,6 +37,8 @@ NOTION_HEADERS = {
     "Notion-Version": NOTION_VERSION,
     "Content-Type": "application/json",
 }
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
@@ -220,6 +222,13 @@ def api_reset():
     if not ok:
         return jsonify({"error": err}), 500
     return jsonify({"ok": True})
+
+
+# ── Serve frontend ──────────────────────────────────────────────────
+
+@app.route("/")
+def serve_frontend():
+    return send_from_directory(BASE_DIR, "index.html")
 
 
 # ── Health check ────────────────────────────────────────────────────

@@ -306,7 +306,8 @@
 
 <script>
 // ── Config ────────────────────────────────────────────────────────
-// Default: same origin (local dev). Override via settings (saved to localStorage)
+// Por defecto: mismo origen (Railway sirve frontend y API juntos)
+// Si usas frontend separado, configura la URL desde ⚙️ (se guarda en localStorage)
 const API = localStorage.getItem('lista_api_url') || '';
 const API_KEY = localStorage.getItem('lista_api_key') || '';
 
