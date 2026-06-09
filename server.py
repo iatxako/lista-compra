@@ -25,7 +25,12 @@ from flask_cors import CORS
 
 # ── Config ──────────────────────────────────────────────────────────
 
-NOTION_TOKEN = os.environ.get("NOTION_TOKEN", "")
+# Try multiple env var names for flexibility
+NOTION_TOKEN = (
+    os.environ.get("NOTION_TOKEN")
+    or os.environ.get("NOTION_API_KEY")
+    or ""
+)
 NOTION_PAGE_ID = os.environ.get("NOTION_PAGE_ID", "37a13b5cd60a818681dbf9436bb2f339")
 API_KEY = os.environ.get("API_KEY", "")
 PORT = int(os.environ.get("PORT", 8767))
@@ -236,6 +241,37 @@ def serve_frontend():
 @app.route("/health")
 def health():
     return jsonify({"status": "ok", "service": "lista-compra-v2"})
+
+
+# ── Debug (solo si DEBUG=true) ───────────────────────────────────────
+
+@app.route("/api/debug")
+def api_debug():
+    if not DEBUG:
+        return jsonify({"error": "debug disabled"}), 404
+    token = NOTION_TOKEN or "(empty)"
+    return jsonify({
+        "env": {
+            "NOTION_TOKEN": token[:8] + "..." if token != "(empty)" else "(empty)",
+            "NOTION_TOKEN_LEN": len(NOTION_TOKEN),
+            "NOTION_PAGE_ID": NOTION_PAGE_ID,
+            "DEBUG": DEBUG,
+        },
+        "notion_test": _test_notion_connection(),
+    })
+
+def _test_notion_connection():
+    if not NOTION_TOKEN:
+        return "no token configured"
+    try:
+        resp = requests.get(
+            f"https://api.notion.com/v1/pages/{NOTION_PAGE_ID}",
+            headers=NOTION_HEADERS,
+            timeout=10,
+        )
+        return f"HTTP {resp.status_code}"
+    except Exception as e:
+        return f"error: {e}"
 
 
 # ── Main ────────────────────────────────────────────────────────────
