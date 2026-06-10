@@ -329,14 +329,6 @@
 let _items = [];
 
 // ── Config ────────────────────────────────────────────────────────
-// Leer API key desde URL (?api_key=...) y guardarla en localStorage
-const urlParams = new URLSearchParams(window.location.search);
-const urlApiKey = urlParams.get('api_key');
-if (urlApiKey) {
-  localStorage.setItem('lista_api_key', urlApiKey);
-  window.history.replaceState({}, '', window.location.pathname);
-}
-
 function getAPI() { return localStorage.getItem('lista_api_url') || ''; }
 function getAPIKey() { return localStorage.getItem('lista_api_key') || ''; }
 

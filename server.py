@@ -26,7 +26,6 @@ from functools import wraps
 import psycopg2
 import psycopg2.extras
 from flask import Flask, request, jsonify, send_from_directory, Response, stream_with_context
-from flask_cors import CORS
 
 # ── Config ──────────────────────────────────────────────────────────
 
@@ -60,7 +59,6 @@ DEBUG = os.environ.get("DEBUG", "").lower() in ("1", "true", "yes")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "*"}})
 logging.basicConfig(level=logging.DEBUG if DEBUG else logging.INFO)
 log = logging.getLogger("lista-compra")
 
