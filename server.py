@@ -302,6 +302,10 @@ def serve_icon_192():
 def serve_icon_512():
     return send_from_directory(BASE_DIR, "icon-512.png")
 
+@app.route("/apple-touch-icon.png")
+def serve_apple_icon():
+    return send_from_directory(BASE_DIR, "apple-touch-icon.png")
+
 
 # ── Health check ────────────────────────────────────────────────────
 
