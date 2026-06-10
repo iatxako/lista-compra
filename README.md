@@ -6,9 +6,8 @@ App web para gestionar la lista de la compra desde cualquier sitio.
 
 - **Frontend:** HTML + JS vanilla (servido por el backend en Railway)
 - **Backend:** Python Flask + Gunicorn (Railway)
-- **Persistencia:** Notion API directa (sin disco local)
+- **Persistencia:** Postgres (Railway)
 - **Auth:** API Key via cabecera `X-API-Key`
-- **Control:** Telegram vía Hermes Agent
 
 ## Arquitectura
 
@@ -19,10 +18,10 @@ App web para gestionar la lista de la compra desde cualquier sitio.
                             │  ├── / → frontend │
                             │  └── /api/* → API │
                             └────────┬─────────┘
-                                     │ Notion API
+                                     │ DATABASE_URL
                             ┌────────▼─────────┐
-                            │  Notion Page      │
-                            │  (lista compra)   │
+                            │  Postgres         │
+                            │  (tabla items)    │
                             └──────────────────┘
 ```
 
@@ -36,20 +35,19 @@ App web para gestionar la lista de la compra desde cualquier sitio.
 
 | Variable | Descripción |
 |----------|-------------|
-| `NOTION_TOKEN` | Token de integración de Notion |
-| `NOTION_PAGE_ID` | ID de la página de la lista (default: 37a13b5c...) |
+| `DATABASE_URL` | Connection string de Postgres (Railway la provee al añadir el plugin) |
 | `API_KEY` | Clave para proteger los endpoints |
 
-4. La app se sirve en `https://lista-compra.up.railway.app`
+4. La app se sirve en `https://api-production-5ac6.up.railway.app`
 
-La API Key se configura en Railway como variable de entorno `API_KEY`.
-Si quieres mantener privacidad extra, añade `?api_key=...` en la URL al compartir.
+La API Key se configura en Railway como variable de entorno `API_KEY` y se introduce
+manualmente en la app (⚙️ Settings) — no se acepta por parámetro de URL.
 
 ## Desarrollo local
 
 ```bash
 pip install -r requirements.txt
-NOTION_TOKEN=... API_KEY=... python3 server.py
+DATABASE_URL=... API_KEY=... python3 server.py
 # Abrir: http://localhost:8767
 ```
 
@@ -68,7 +66,7 @@ NOTION_TOKEN=... API_KEY=... python3 server.py
 
 - ✅ Backend en Railway (accesible desde cualquier sitio)
 - ✅ Frontend servido por el mismo Railway (sin CORS, sin servicios extra)
-- ✅ Persistencia directa a Notion (sin `data.json`)
+- ✅ Persistencia en Postgres (sin `data.json`)
 - ✅ Auth con API Key
 - ✅ Sin puertos abiertos en el NAS
 - ✅ Sin dependencias del ecosistema local
