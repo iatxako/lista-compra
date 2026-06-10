@@ -28,10 +28,12 @@ from flask_cors import CORS
 # ── Config ──────────────────────────────────────────────────────────
 
 def _resolve_database_url() -> str:
-    raw = os.environ.get("DATABASE_URL", "")
-    # Guard: strip accidental key=value prefix (e.g. "DATABASE_URL=postgresql://...")
-    if raw.startswith("DATABASE_URL="):
-        raw = raw[len("DATABASE_URL="):]
+    raw = os.environ.get("DATABASE_URL", "").strip()
+    # Handle accidental "DATABASE_URL = postgresql://..." format (env file line pasted as value)
+    if raw.upper().startswith("DATABASE_URL"):
+        rest = raw[len("DATABASE_URL"):].lstrip(" \t=")
+        if rest.startswith("postgresql://") or rest.startswith("postgres://"):
+            raw = rest
     # Railway provides postgres:// but psycopg2/libpq requires postgresql://
     if raw.startswith("postgres://"):
         raw = "postgresql://" + raw[len("postgres://"):]
