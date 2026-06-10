@@ -87,6 +87,16 @@ def init_db():
                 created_at TIMESTAMP DEFAULT NOW()
             )
         """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS catalog (
+                name TEXT PRIMARY KEY,
+                times_added INTEGER NOT NULL DEFAULT 0,
+                times_purchased INTEGER NOT NULL DEFAULT 0,
+                last_added_at TIMESTAMP,
+                last_purchased_at TIMESTAMP,
+                avg_interval_days DOUBLE PRECISION
+            )
+        """)
         conn.commit()
         cur.close()
         conn.close()
@@ -185,6 +195,30 @@ def api_list():
     return jsonify({"items": items, "updated": datetime.now().isoformat()})
 
 
+@app.route("/api/suggestions")
+def api_suggestions():
+    if not DATABASE_URL:
+        return jsonify({"suggestions": []})
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT c.name, c.times_added
+            FROM catalog c
+            WHERE c.times_added > 1
+              AND NOT EXISTS (SELECT 1 FROM items i WHERE i.name = c.name)
+            ORDER BY c.times_added DESC
+            LIMIT 5
+        """)
+        suggestions = [dict(r) for r in cur.fetchall()]
+        cur.close()
+        conn.close()
+        return jsonify({"suggestions": suggestions})
+    except Exception as e:
+        log.error("Error loading suggestions: %s", e)
+        return jsonify({"suggestions": []})
+
+
 @app.route("/api/check", methods=["POST"])
 @require_api_key
 def api_check():
@@ -199,6 +233,24 @@ def api_check():
         conn = get_db()
         cur = conn.cursor()
         cur.execute("UPDATE items SET checked = %s WHERE name = %s", (checked, name))
+        if checked:
+            cur.execute("SELECT times_purchased, last_purchased_at, avg_interval_days FROM catalog WHERE name = %s", (name,))
+            row = cur.fetchone()
+            if row and row["last_purchased_at"]:
+                interval = (datetime.now() - row["last_purchased_at"]).total_seconds() / 86400
+                prev_avg = row["avg_interval_days"]
+                prev_purchases = row["times_purchased"] or 0
+                new_avg = interval if prev_avg is None else (prev_avg * prev_purchases + interval) / (prev_purchases + 1)
+            else:
+                new_avg = None
+            cur.execute("""
+                INSERT INTO catalog (name, times_purchased, last_purchased_at, avg_interval_days)
+                VALUES (%s, 1, NOW(), %s)
+                ON CONFLICT (name) DO UPDATE
+                    SET times_purchased = catalog.times_purchased + 1,
+                        last_purchased_at = NOW(),
+                        avg_interval_days = %s
+            """, (name, new_avg, new_avg))
         conn.commit()
         cur.close()
         conn.close()
@@ -229,6 +281,13 @@ def api_add():
             "INSERT INTO items (name, added, checked) VALUES (%s, %s, FALSE) ON CONFLICT (name) DO NOTHING",
             (name, today)
         )
+        cur.execute("""
+            INSERT INTO catalog (name, times_added, last_added_at)
+            VALUES (%s, 1, NOW())
+            ON CONFLICT (name) DO UPDATE
+                SET times_added = catalog.times_added + 1,
+                    last_added_at = NOW()
+        """, (name,))
         conn.commit()
         cur.close()
         conn.close()

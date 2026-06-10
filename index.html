@@ -42,7 +42,7 @@
     background: var(--bg);
     color: var(--text);
     padding: 16px;
-    padding-bottom: 100px;
+    padding-bottom: 200px;
     max-width: 600px;
     margin: 0 auto;
     -webkit-tap-highlight-color: transparent;
@@ -123,20 +123,24 @@
   }
   .delete-btn:active { opacity: 1; }
 
-  /* Add form */
-  .add-form {
+  /* Bottom panel */
+  .bottom-panel {
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
-    background: var(--card);
-    padding: 12px 16px;
-    padding-bottom: max(12px, env(safe-area-inset-bottom));
-    box-shadow: 0 -2px 12px rgba(0,0,0,0.1);
-    display: flex;
-    gap: 8px;
     max-width: 600px;
     margin: 0 auto;
+    background: var(--card);
+    box-shadow: 0 -2px 12px rgba(0,0,0,0.1);
+    padding-bottom: max(0px, env(safe-area-inset-bottom));
+  }
+
+  /* Add form */
+  .add-form {
+    display: flex;
+    gap: 8px;
+    padding: 12px 16px;
   }
   .add-form input {
     flex: 1;
@@ -150,6 +154,13 @@
   .add-form input:focus {
     border-color: var(--blue);
   }
+  .input-error {
+    font-size: 0.78rem;
+    color: var(--red);
+    padding: 0 16px 6px;
+    display: none;
+  }
+  .input-error.show { display: block; }
   .add-form button {
     background: var(--blue);
     color: white;
@@ -164,38 +175,6 @@
   .add-form button:active {
     background: #1558b0;
   }
-
-  /* Action bar */
-  .actions {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 16px;
-  }
-  .actions button {
-    flex: 1;
-    padding: 10px;
-    border: none;
-    border-radius: 10px;
-    font-size: 0.85rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background 0.15s;
-  }
-  .btn-sync {
-    background: var(--green);
-    color: white;
-  }
-  .btn-sync:active { background: #1e6b2f; }
-  .btn-refresh {
-    background: #e9ecef;
-    color: var(--text);
-  }
-  .btn-refresh:active { background: #ced4da; }
-  .btn-reset {
-    background: #fff5f5;
-    color: var(--red);
-  }
-  .btn-reset:active { background: #ffe3e3; }
 
   /* Empty state */
   .empty {
@@ -223,57 +202,6 @@
   }
   .toast.show { opacity: 1; }
 
-  /* Settings popup */
-  .settings-overlay {
-    display: none;
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0,0,0,0.4);
-    z-index: 200;
-    justify-content: center;
-    align-items: center;
-  }
-  .settings-overlay.show { display: flex; }
-  .settings-card {
-    background: var(--card);
-    border-radius: 16px;
-    padding: 24px;
-    width: 90%;
-    max-width: 400px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
-  }
-  .settings-card h3 { margin-bottom: 16px; }
-  .settings-card label {
-    display: block;
-    font-size: 0.85rem;
-    font-weight: 600;
-    margin-bottom: 4px;
-    color: var(--muted);
-  }
-  .settings-card input {
-    width: 100%;
-    padding: 10px 12px;
-    border: 2px solid var(--border);
-    border-radius: 8px;
-    font-size: 0.95rem;
-    margin-bottom: 12px;
-    box-sizing: border-box;
-  }
-  .settings-card .btn-row {
-    display: flex;
-    gap: 8px;
-    margin-top: 8px;
-  }
-  .settings-card .btn-row button {
-    flex: 1;
-    padding: 10px;
-    border: none;
-    border-radius: 8px;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  .btn-save { background: var(--blue); color: white; }
-  .btn-close { background: #e9ecef; color: var(--text); }
   .settings-icon {
     position: fixed;
     top: 16px;
@@ -287,40 +215,75 @@
     z-index: 50;
   }
   .settings-icon:active { opacity: 1; }
+
+  /* Suggestions */
+  .suggestions-section {
+    padding: 8px 16px 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  .suggestions-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 6px;
+  }
+  .suggestions-chips {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+    align-items: center;
+  }
+  .suggestions-chips::-webkit-scrollbar { display: none; }
+  .chip {
+    display: flex;
+    align-items: center;
+    background: var(--bg);
+    border: 1.5px solid var(--border);
+    border-radius: 20px;
+    padding: 7px 14px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    user-select: none;
+  }
+  .chip:active { background: var(--border); }
+  .chip-name { font-size: 0.88rem; font-weight: 500; }
+  .chip-clear {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 0.78rem;
+    cursor: pointer;
+    padding: 7px 10px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
 </style>
 </head>
 <body>
 
 <div class="toast" id="toast"></div>
-<button class="settings-icon" onclick="showSettings()">⚙️</button>
+<button class="settings-icon" onclick="resetList()" title="Vaciar lista">🗑️</button>
 
-<h1>🛒 Lista</h1>
+<h1>Lista de la compra</h1>
 <div class="subtitle" id="subtitle">Cargando...</div>
-
-<div class="actions">
-  <button class="btn-refresh" onclick="loadList()">↺ Recargar</button>
-  <button class="btn-reset" onclick="resetList()">🗑️ Vaciar</button>
-</div>
 
 <div id="list"></div>
 
-<div class="add-form">
-  <input type="text" id="newItem" placeholder="Añadir item..." autocomplete="off">
-  <button onclick="addItem()">Añadir</button>
-</div>
-
-<!-- Settings -->
-<div class="settings-overlay" id="settingsOverlay">
-  <div class="settings-card">
-    <h3>⚙️ Configuración</h3>
-    <label>URL del servidor</label>
-    <input type="url" id="settingApiUrl" placeholder="https://api.ejemplo.com">
-    <label>Clave de acceso</label>
-    <input type="password" id="settingApiKey" placeholder="API Key">
-    <div class="btn-row">
-      <button class="btn-close" onclick="hideSettings()">Cancelar</button>
-      <button class="btn-save" onclick="saveSettings()">Guardar</button>
-    </div>
+<div class="bottom-panel">
+  <div class="suggestions-section" id="suggestions-section" style="display:none">
+    <div class="suggestions-label">Sugerencias</div>
+    <div class="suggestions-chips" id="suggestions-chips"></div>
+  </div>
+  <div class="input-error" id="input-error">Ya está en la lista</div>
+  <div class="add-form">
+    <input type="text" id="newItem" placeholder="Añadir item..." autocomplete="off">
+    <button onclick="addItem()">+</button>
   </div>
 </div>
 
@@ -329,6 +292,14 @@
 let _items = [];
 
 // ── Config ────────────────────────────────────────────────────────
+// Leer API key desde URL (?api_key=...) y guardarla en localStorage
+const urlParams = new URLSearchParams(window.location.search);
+const urlApiKey = urlParams.get('api_key');
+if (urlApiKey) {
+  localStorage.setItem('lista_api_key', urlApiKey);
+  window.history.replaceState({}, '', window.location.pathname);
+}
+
 function getAPI() { return localStorage.getItem('lista_api_url') || ''; }
 function getAPIKey() { return localStorage.getItem('lista_api_key') || ''; }
 
@@ -339,25 +310,70 @@ function apiHeaders() {
   return h;
 }
 
-// ── Settings UI ───────────────────────────────────────────────────
-function showSettings() {
-  document.getElementById('settingApiUrl').value = localStorage.getItem('lista_api_url') || '';
-  document.getElementById('settingApiKey').value = localStorage.getItem('lista_api_key') || '';
-  document.getElementById('settingsOverlay').classList.add('show');
+// ── Suggestions state ────────────────────────────────────────────
+let _suggestions = [];
+let _dismissed = new Set();
+let _suggestionsTimer = null;
+
+function scheduleSuggestionsRefresh() {
+  clearTimeout(_suggestionsTimer);
+  _suggestionsTimer = setTimeout(loadSuggestions, 1500);
 }
-function hideSettings() {
-  document.getElementById('settingsOverlay').classList.remove('show');
+
+async function loadSuggestions() {
+  try {
+    const res = await fetch(`${getAPI()}/api/suggestions`);
+    const data = await res.json();
+    _suggestions = (data.suggestions || []).filter(s => !_dismissed.has(s.name));
+    renderSuggestions();
+  } catch(e) {}
 }
-function saveSettings() {
-  const url = document.getElementById('settingApiUrl').value.trim();
-  const key = document.getElementById('settingApiKey').value.trim();
-  if (url) localStorage.setItem('lista_api_url', url);
-  else localStorage.removeItem('lista_api_url');
-  if (key) localStorage.setItem('lista_api_key', key);
-  else localStorage.removeItem('lista_api_key');
-  hideSettings();
-  toast('⚙️ Configuración guardada');
-  loadList();
+
+function renderSuggestions() {
+  const section = document.getElementById('suggestions-section');
+  const chips = document.getElementById('suggestions-chips');
+  const visible = _suggestions.filter(s => !_dismissed.has(s.name));
+  if (!visible.length) { section.style.display = 'none'; return; }
+  section.style.display = 'block';
+  chips.innerHTML = visible.map(s => {
+    const n = escapeHtml(s.name);
+    return `<div class="chip" onclick="addFromSuggestion('${n}')"><span class="chip-name">${n}</span></div>`;
+  }).join('') + `<button class="chip-clear" onclick="clearSuggestions()">Borrar</button>`;
+}
+
+function clearSuggestions() {
+  _suggestions.forEach(s => _dismissed.add(s.name));
+  renderSuggestions();
+}
+
+async function addFromSuggestion(name) {
+  if (_items.find(i => i.name === name)) { _dismissed.add(name); renderSuggestions(); return; }
+  _dismissed.add(name);
+  renderSuggestions();
+  const today = new Date().toLocaleDateString('es-ES', {day: 'numeric', month: 'short'});
+  _items.push({name, added: today, checked: false});
+  render(_items);
+  updateSubtitle();
+  try {
+    await fetch(`${getAPI()}/api/add`, {
+      method: 'POST', headers: apiHeaders(),
+      body: JSON.stringify({name})
+    });
+  } catch(e) {
+    _items = _items.filter(i => i.name !== name);
+    render(_items);
+    updateSubtitle();
+    toast('Error al añadir');
+  }
+}
+
+// ── Input error ───────────────────────────────────────────────────
+let _errorTimer = null;
+function showInputError() {
+  const el = document.getElementById('input-error');
+  el.classList.add('show');
+  clearTimeout(_errorTimer);
+  _errorTimer = setTimeout(() => el.classList.remove('show'), 2000);
 }
 
 // ── Toast ────────────────────────────────────────────────────────
@@ -441,7 +457,7 @@ async function addItem() {
   const input = document.getElementById('newItem');
   const name = input.value.trim();
   if (!name) return;
-  if (_items.find(i => i.name === name)) { toast('Ya está en la lista'); return; }
+  if (_items.find(i => i.name === name)) { showInputError(); return; }
   input.value = '';
   input.focus();
   const today = new Date().toLocaleDateString('es-ES', {day: 'numeric', month: 'short'});
@@ -518,6 +534,7 @@ function connectSSE() {
     _items = data.items || [];
     render(_items);
     updateSubtitle();
+    scheduleSuggestionsRefresh();
   };
   es.onerror = () => {
     document.getElementById('subtitle').textContent = 'Reconectando...';
@@ -526,6 +543,7 @@ function connectSSE() {
 
 // ── Init ─────────────────────────────────────────────────────────
 connectSSE();
+loadSuggestions();
 </script>
 </body>
 </html>
