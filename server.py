@@ -273,13 +273,16 @@ def health():
     })
 
 
+# ── Startup ─────────────────────────────────────────────────────────
+
+init_db()
+if not DATABASE_URL:
+    log.warning("DATABASE_URL not set — API will return empty lists")
+if not API_KEY:
+    log.warning("API_KEY not set — endpoints are unprotected")
+
 # ── Main ────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    init_db()
-    if not DATABASE_URL:
-        log.warning("DATABASE_URL not set — API will return empty lists")
-    if not API_KEY:
-        log.warning("API_KEY not set — endpoints are unprotected")
     log.info("Starting on port %d (debug=%s)", PORT, DEBUG)
     app.run(host="0.0.0.0", port=PORT, debug=DEBUG)
