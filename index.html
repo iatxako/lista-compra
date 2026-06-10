@@ -325,6 +325,9 @@
 </div>
 
 <script>
+// ── State ────────────────────────────────────────────────────────
+let _items = [];
+
 // ── Config ────────────────────────────────────────────────────────
 // Leer API key desde URL (?api_key=...) y guardarla en localStorage
 const urlParams = new URLSearchParams(window.location.search);
@@ -373,17 +376,23 @@ function toast(msg) {
   setTimeout(() => el.classList.remove('show'), 2000);
 }
 
+// ── Subtitle ─────────────────────────────────────────────────────
+function updateSubtitle() {
+  const total = _items.length;
+  const done = _items.filter(i => i.checked).length;
+  document.getElementById('subtitle').textContent =
+    total > 0 ? `${done} de ${total} comprados` : 'Lista vacía';
+}
+
 // ── Load ─────────────────────────────────────────────────────────
 async function loadList() {
   try {
     const res = await fetch(`${getAPI()}/api/list`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    render(data.items || []);
-    const total = data.items.length;
-    const done = data.items.filter(i => i.checked).length;
-    document.getElementById('subtitle').textContent =
-      total > 0 ? `${done} de ${total} comprados` : 'Lista vacía';
+    _items = data.items || [];
+    render(_items);
+    updateSubtitle();
   } catch (e) {
     document.getElementById('subtitle').textContent = 'Error de conexión';
     toast('Error al cargar');
@@ -415,18 +424,22 @@ function escapeHtml(text) {
 
 // ── Toggle check ─────────────────────────────────────────────────
 async function toggleCheck(idx) {
-  const items = getCurrentItems();
-  if (!items[idx]) return;
-  const item = items[idx];
-  item.checked = !item.checked;
+  if (!_items[idx]) return;
+  const item = _items[idx];
+  const prev = item.checked;
+  item.checked = !prev;
+  render(_items);
+  updateSubtitle();
   try {
     await fetch(`${getAPI()}/api/check`, {
       method: 'POST',
       headers: apiHeaders(),
       body: JSON.stringify({name: item.name, checked: item.checked})
     });
-    loadList();
   } catch (e) {
+    item.checked = prev;
+    render(_items);
+    updateSubtitle();
     toast('Error al marcar');
   }
 }
@@ -436,36 +449,44 @@ async function addItem() {
   const input = document.getElementById('newItem');
   const name = input.value.trim();
   if (!name) return;
+  if (_items.find(i => i.name === name)) { toast('Ya está en la lista'); return; }
   input.value = '';
   input.focus();
+  const today = new Date().toLocaleDateString('es-ES', {day: 'numeric', month: 'short'});
+  _items.push({name, added: today, checked: false});
+  render(_items);
+  updateSubtitle();
   try {
-    const res = await fetch(`${getAPI()}/api/add`, {
+    await fetch(`${getAPI()}/api/add`, {
       method: 'POST',
       headers: apiHeaders(),
       body: JSON.stringify({name})
     });
-    const data = await res.json();
-    if (data.duplicate) toast('⚠️ Ya está en la lista');
-    else toast('✓ Añadido');
-    loadList();
   } catch (e) {
+    _items = _items.filter(i => i.name !== name);
+    render(_items);
+    updateSubtitle();
     toast('Error al añadir');
   }
 }
 
 // ── Remove item ──────────────────────────────────────────────────
 async function removeItem(idx) {
-  const items = getCurrentItems();
-  const item = items[idx];
-  if (!item) return;
+  if (!_items[idx]) return;
+  const item = _items[idx];
+  _items.splice(idx, 1);
+  render(_items);
+  updateSubtitle();
   try {
     await fetch(`${getAPI()}/api/remove`, {
       method: 'POST',
       headers: apiHeaders(),
       body: JSON.stringify({name: item.name})
     });
-    loadList();
   } catch (e) {
+    _items.splice(idx, 0, item);
+    render(_items);
+    updateSubtitle();
     toast('Error al eliminar');
   }
 }
@@ -473,26 +494,22 @@ async function removeItem(idx) {
 // ── Reset list ───────────────────────────────────────────────────
 async function resetList() {
   if (!confirm('¿Vaciar toda la lista?')) return;
+  const prev = [..._items];
+  _items = [];
+  render(_items);
+  updateSubtitle();
   try {
     await fetch(`${getAPI()}/api/reset`, {
       method: 'POST',
       headers: apiHeaders()
     });
-    toast('🗑️ Lista vaciada');
-    loadList();
+    toast('Lista vaciada');
   } catch (e) {
+    _items = prev;
+    render(_items);
+    updateSubtitle();
     toast('Error');
   }
-}
-
-// ── Helper ──────────────────────────────────────────────────────
-function getCurrentItems() {
-  const els = document.querySelectorAll('.item');
-  return Array.from(els).map(el => ({
-    name: el.querySelector('.item-name').textContent,
-    checked: el.classList.contains('checked'),
-    added: el.querySelector('.item-added').textContent
-  }));
 }
 
 // ── Keyboard shortcut ────────────────────────────────────────────
@@ -506,11 +523,9 @@ function connectSSE() {
   const es = new EventSource(url);
   es.onmessage = (e) => {
     const data = JSON.parse(e.data);
-    render(data.items || []);
-    const total = data.items.length;
-    const done = data.items.filter(i => i.checked).length;
-    document.getElementById('subtitle').textContent =
-      total > 0 ? `${done} de ${total} comprados` : 'Lista vacía';
+    _items = data.items || [];
+    render(_items);
+    updateSubtitle();
   };
   es.onerror = () => {
     document.getElementById('subtitle').textContent = 'Reconectando...';
