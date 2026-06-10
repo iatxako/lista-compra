@@ -290,6 +290,18 @@ def api_reset():
 def serve_frontend():
     return send_from_directory(BASE_DIR, "index.html")
 
+@app.route("/manifest.json")
+def serve_manifest():
+    return send_from_directory(BASE_DIR, "manifest.json")
+
+@app.route("/icon-192.png")
+def serve_icon_192():
+    return send_from_directory(BASE_DIR, "icon-192.png")
+
+@app.route("/icon-512.png")
+def serve_icon_512():
+    return send_from_directory(BASE_DIR, "icon-512.png")
+
 
 # ── Health check ────────────────────────────────────────────────────
 
