@@ -58,7 +58,7 @@
   .subtitle {
     color: var(--muted);
     font-size: 0.85rem;
-    margin-bottom: 20px;
+    margin-bottom: 12px;
   }
   .item {
     background: var(--card);
@@ -122,6 +122,22 @@
     transition: opacity 0.15s;
   }
   .delete-btn:active { opacity: 1; }
+
+  /* Offline banner */
+  .offline-banner {
+    display: none;
+    background: #e67700;
+    color: white;
+    text-align: center;
+    padding: 8px 16px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    border-radius: 8px;
+    margin-bottom: 12px;
+  }
+  .offline-banner.syncing {
+    background: var(--blue);
+  }
 
   /* Bottom panel */
   .bottom-panel {
@@ -272,6 +288,7 @@
 
 <h1>Lista de la compra</h1>
 <div class="subtitle" id="subtitle">Cargando...</div>
+<div class="offline-banner" id="offline-banner"></div>
 
 <div id="list"></div>
 
@@ -292,7 +309,6 @@
 let _items = [];
 
 // ── Config ────────────────────────────────────────────────────────
-// Leer API key desde URL (?api_key=...) y guardarla en localStorage
 const urlParams = new URLSearchParams(window.location.search);
 const urlApiKey = urlParams.get('api_key');
 if (urlApiKey) {
@@ -308,6 +324,88 @@ function apiHeaders() {
   const k = getAPIKey();
   if (k) h['X-API-Key'] = k;
   return h;
+}
+
+// ── Offline cache & pending queue ─────────────────────────────────
+const _CACHE_KEY   = 'lista_cache';
+const _PENDING_KEY = 'lista_pending';
+let _initialLoadDone = false;
+let _syncing = false;
+
+function _saveCache(items) {
+  try { localStorage.setItem(_CACHE_KEY, JSON.stringify(items)); } catch(e) {}
+}
+function _loadCache() {
+  try { return JSON.parse(localStorage.getItem(_CACHE_KEY)); } catch(e) { return null; }
+}
+function _getPending() {
+  try { return JSON.parse(localStorage.getItem(_PENDING_KEY) || '[]'); } catch(e) { return []; }
+}
+function _savePending(ops) {
+  try { localStorage.setItem(_PENDING_KEY, JSON.stringify(ops)); } catch(e) {}
+}
+function _enqueuePending(op) {
+  const ops = _getPending();
+  ops.push(op);
+  _savePending(ops);
+  _updateOfflineBanner();
+}
+
+function _updateOfflineBanner(msg) {
+  const el = document.getElementById('offline-banner');
+  if (!el) return;
+  const pending = _getPending().length;
+  if (msg !== undefined) {
+    el.textContent = msg;
+    el.className = 'offline-banner' + (msg === 'Sincronizando...' ? ' syncing' : '');
+    el.style.display = 'block';
+    return;
+  }
+  if (!navigator.onLine) {
+    el.className = 'offline-banner';
+    el.textContent = pending > 0
+      ? `Sin conexión · ${pending} cambio${pending !== 1 ? 's' : ''} pendiente${pending !== 1 ? 's' : ''}`
+      : 'Sin conexión';
+    el.style.display = 'block';
+  } else if (pending > 0) {
+    el.className = 'offline-banner syncing';
+    el.textContent = `${pending} cambio${pending !== 1 ? 's' : ''} pendiente${pending !== 1 ? 's' : ''} de sincronizar`;
+    el.style.display = 'block';
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+async function _syncPending() {
+  if (_syncing) return;
+  _syncing = true;
+  _updateOfflineBanner('Sincronizando...');
+  while (_getPending().length > 0) {
+    const op = _getPending()[0];
+    try {
+      let url, body;
+      if      (op.type === 'check')  { url = '/api/check';  body = {name: op.name, checked: op.checked}; }
+      else if (op.type === 'add')    { url = '/api/add';    body = {name: op.name}; }
+      else if (op.type === 'remove') { url = '/api/remove'; body = {name: op.name}; }
+      else if (op.type === 'reset')  { url = '/api/reset';  body = {}; }
+      const res = await fetch(`${getAPI()}${url}`, {
+        method: 'POST', headers: apiHeaders(), body: JSON.stringify(body)
+      });
+      if (!res.ok) throw new Error(`server ${res.status}`);
+      const ops = _getPending();
+      ops.shift();
+      _savePending(ops);
+    } catch(e) {
+      toast('Error al sincronizar offline');
+      _updateOfflineBanner();
+      _syncing = false;
+      return;
+    }
+  }
+  await loadList();
+  _updateOfflineBanner();
+  toast('Cambios sincronizados ✓');
+  _syncing = false;
 }
 
 // ── Suggestions state ────────────────────────────────────────────
@@ -354,16 +452,14 @@ async function addFromSuggestion(name) {
   _items.push({name, added: today, checked: false});
   render(_items);
   updateSubtitle();
+  _saveCache(_items);
   try {
     await fetch(`${getAPI()}/api/add`, {
       method: 'POST', headers: apiHeaders(),
       body: JSON.stringify({name})
     });
   } catch(e) {
-    _items = _items.filter(i => i.name !== name);
-    render(_items);
-    updateSubtitle();
-    toast('Error al añadir');
+    _enqueuePending({type: 'add', name});
   }
 }
 
@@ -399,11 +495,23 @@ async function loadList() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     _items = data.items || [];
+    _saveCache(_items);
+    _initialLoadDone = true;
     render(_items);
     updateSubtitle();
   } catch (e) {
-    document.getElementById('subtitle').textContent = 'Error de conexión';
-    toast('Error al cargar');
+    if (!_initialLoadDone) {
+      const cached = _loadCache();
+      if (cached !== null) {
+        _items = cached;
+        _initialLoadDone = true;
+        render(_items);
+        updateSubtitle();
+        return;
+      }
+      document.getElementById('subtitle').textContent = 'Sin conexión';
+      render([]);
+    }
   }
 }
 
@@ -434,10 +542,10 @@ function escapeHtml(text) {
 async function toggleCheck(idx) {
   if (!_items[idx]) return;
   const item = _items[idx];
-  const prev = item.checked;
-  item.checked = !prev;
+  item.checked = !item.checked;
   render(_items);
   updateSubtitle();
+  _saveCache(_items);
   try {
     await fetch(`${getAPI()}/api/check`, {
       method: 'POST',
@@ -445,10 +553,7 @@ async function toggleCheck(idx) {
       body: JSON.stringify({name: item.name, checked: item.checked})
     });
   } catch (e) {
-    item.checked = prev;
-    render(_items);
-    updateSubtitle();
-    toast('Error al marcar');
+    _enqueuePending({type: 'check', name: item.name, checked: item.checked});
   }
 }
 
@@ -464,17 +569,14 @@ async function addItem() {
   _items.push({name, added: today, checked: false});
   render(_items);
   updateSubtitle();
+  _saveCache(_items);
   try {
     await fetch(`${getAPI()}/api/add`, {
-      method: 'POST',
-      headers: apiHeaders(),
+      method: 'POST', headers: apiHeaders(),
       body: JSON.stringify({name})
     });
   } catch (e) {
-    _items = _items.filter(i => i.name !== name);
-    render(_items);
-    updateSubtitle();
-    toast('Error al añadir');
+    _enqueuePending({type: 'add', name});
   }
 }
 
@@ -485,6 +587,7 @@ async function removeItem(idx) {
   _items.splice(idx, 1);
   render(_items);
   updateSubtitle();
+  _saveCache(_items);
   try {
     await fetch(`${getAPI()}/api/remove`, {
       method: 'POST',
@@ -492,20 +595,17 @@ async function removeItem(idx) {
       body: JSON.stringify({name: item.name})
     });
   } catch (e) {
-    _items.splice(idx, 0, item);
-    render(_items);
-    updateSubtitle();
-    toast('Error al eliminar');
+    _enqueuePending({type: 'remove', name: item.name});
   }
 }
 
 // ── Reset list ───────────────────────────────────────────────────
 async function resetList() {
   if (!confirm('¿Vaciar toda la lista?')) return;
-  const prev = [..._items];
   _items = [];
   render(_items);
   updateSubtitle();
+  _saveCache(_items);
   try {
     await fetch(`${getAPI()}/api/reset`, {
       method: 'POST',
@@ -513,10 +613,8 @@ async function resetList() {
     });
     toast('Lista vaciada');
   } catch (e) {
-    _items = prev;
-    render(_items);
-    updateSubtitle();
-    toast('Error');
+    _enqueuePending({type: 'reset'});
+    toast('Lista vaciada (sin conexión)');
   }
 }
 
@@ -530,20 +628,50 @@ function connectSSE() {
   const url = `${getAPI()}/api/stream`;
   const es = new EventSource(url);
   es.onmessage = (e) => {
+    _initialLoadDone = true;
+    // If there are pending ops, sync them first before applying server state
+    if (_getPending().length > 0 && !_syncing) {
+      _syncPending();
+      return;
+    }
     const data = JSON.parse(e.data);
     _items = data.items || [];
+    _saveCache(_items);
     render(_items);
     updateSubtitle();
     scheduleSuggestionsRefresh();
   };
   es.onerror = () => {
-    document.getElementById('subtitle').textContent = 'Reconectando...';
+    if (!_initialLoadDone) {
+      const cached = _loadCache();
+      if (cached !== null) {
+        _items = cached;
+        _initialLoadDone = true;
+        render(_items);
+        updateSubtitle();
+      } else {
+        document.getElementById('subtitle').textContent = 'Sin conexión';
+        render([]);
+        _initialLoadDone = true;
+      }
+    }
+    _updateOfflineBanner();
   };
 }
+
+// ── Online/offline events ─────────────────────────────────────────
+window.addEventListener('online', () => {
+  _updateOfflineBanner();
+  if (_getPending().length > 0) _syncPending();
+});
+window.addEventListener('offline', () => {
+  _updateOfflineBanner();
+});
 
 // ── Init ─────────────────────────────────────────────────────────
 connectSSE();
 loadSuggestions();
+_updateOfflineBanner();
 </script>
 </body>
 </html>
