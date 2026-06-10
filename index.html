@@ -278,7 +278,7 @@
 <div class="subtitle" id="subtitle">Cargando...</div>
 
 <div class="actions">
-  <button class="btn-refresh" onclick="loadList()">🔄 Recargar</button>
+  <button class="btn-refresh" onclick="loadList()">↺ Recargar</button>
   <button class="btn-reset" onclick="resetList()">🗑️ Vaciar</button>
 </div>
 
@@ -480,10 +480,25 @@ document.getElementById('newItem').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') addItem();
 });
 
+// ── SSE ──────────────────────────────────────────────────────────
+function connectSSE() {
+  const url = `${getAPI()}/api/stream`;
+  const es = new EventSource(url);
+  es.onmessage = (e) => {
+    const data = JSON.parse(e.data);
+    render(data.items || []);
+    const total = data.items.length;
+    const done = data.items.filter(i => i.checked).length;
+    document.getElementById('subtitle').textContent =
+      total > 0 ? `${done} de ${total} comprados` : 'Lista vacía';
+  };
+  es.onerror = () => {
+    document.getElementById('subtitle').textContent = 'Reconectando...';
+  };
+}
+
 // ── Init ─────────────────────────────────────────────────────────
-loadList();
-// Auto-refresh every 30s
-setInterval(loadList, 30000);
+connectSSE();
 </script>
 </body>
 </html>

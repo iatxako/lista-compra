@@ -17,12 +17,15 @@ Persistencia: Postgres (DATABASE_URL)
 import os
 import json
 import logging
+import queue
+import threading
+import time
 from datetime import datetime
 from functools import wraps
 
 import psycopg2
 import psycopg2.extras
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, Response, stream_with_context
 from flask_cors import CORS
 
 # ── Config ──────────────────────────────────────────────────────────
@@ -111,6 +114,26 @@ def load_items():
         return []
 
 
+# ── SSE pub/sub ─────────────────────────────────────────────────────
+
+_sse_clients: list[queue.Queue] = []
+_sse_lock = threading.Lock()
+
+
+def _notify_clients():
+    items = load_items()
+    payload = "data: " + json.dumps({"items": items, "updated": datetime.now().isoformat()}) + "\n\n"
+    with _sse_lock:
+        dead = []
+        for q in _sse_clients:
+            try:
+                q.put_nowait(payload)
+            except queue.Full:
+                dead.append(q)
+        for q in dead:
+            _sse_clients.remove(q)
+
+
 # ── Auth decorator ──────────────────────────────────────────────────
 
 def require_api_key(f):
@@ -124,6 +147,39 @@ def require_api_key(f):
 
 
 # ── API Routes ──────────────────────────────────────────────────────
+
+@app.route("/api/stream")
+def api_stream():
+    q: queue.Queue = queue.Queue(maxsize=10)
+    with _sse_lock:
+        _sse_clients.append(q)
+
+    def generate():
+        # Send current state immediately on connect
+        items = load_items()
+        yield "data: " + json.dumps({"items": items, "updated": datetime.now().isoformat()}) + "\n\n"
+        try:
+            while True:
+                try:
+                    msg = q.get(timeout=25)
+                    yield msg
+                except queue.Empty:
+                    yield ": heartbeat\n\n"
+        except GeneratorExit:
+            pass
+        finally:
+            with _sse_lock:
+                try:
+                    _sse_clients.remove(q)
+                except ValueError:
+                    pass
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
 
 @app.route("/api/list")
 def api_list():
@@ -148,6 +204,7 @@ def api_check():
         conn.commit()
         cur.close()
         conn.close()
+        _notify_clients()
         return jsonify({"ok": True, "item": {"name": name, "checked": checked}})
     except Exception as e:
         log.error("Error checking item: %s", e)
@@ -177,6 +234,7 @@ def api_add():
         conn.commit()
         cur.close()
         conn.close()
+        _notify_clients()
         return jsonify({"ok": True})
     except Exception as e:
         log.error("Error adding item: %s", e)
@@ -199,6 +257,7 @@ def api_remove():
         conn.commit()
         cur.close()
         conn.close()
+        _notify_clients()
         return jsonify({"ok": True})
     except Exception as e:
         log.error("Error removing item: %s", e)
@@ -218,6 +277,7 @@ def api_reset():
         conn.commit()
         cur.close()
         conn.close()
+        _notify_clients()
         return jsonify({"ok": True})
     except Exception as e:
         log.error("Error resetting: %s", e)
