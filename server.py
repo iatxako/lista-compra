@@ -233,22 +233,6 @@ def serve_frontend():
 
 # ── Health check ────────────────────────────────────────────────────
 
-@app.route("/debug-db")
-def debug_db():
-    raw = os.environ.get("DATABASE_URL", "")
-    resolved = DATABASE_URL
-    return jsonify({
-        "raw_len": len(raw),
-        "raw_prefix": raw[:40] if raw else "(empty)",
-        "resolved_len": len(resolved),
-        "resolved_prefix": resolved[:40] if resolved else "(empty)",
-        "starts_with": {
-            "postgresql://": raw.startswith("postgresql://"),
-            "postgres://": raw.startswith("postgres://"),
-            "DATABASE_URL=": raw.startswith("DATABASE_URL="),
-        }
-    })
-
 
 @app.route("/health")
 def health():
