@@ -134,10 +134,25 @@
     font-weight: 600;
     border-radius: 8px;
     margin-bottom: 12px;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
   }
   .offline-banner.syncing {
     background: var(--blue);
   }
+  .retry-btn {
+    background: rgba(255,255,255,0.25);
+    border: none;
+    color: white;
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .retry-btn:active { background: rgba(255,255,255,0.4); }
 
   /* Bottom panel */
   .bottom-panel {
@@ -288,7 +303,7 @@
 
 <h1>Lista de la compra</h1>
 <div class="subtitle" id="subtitle">Cargando...</div>
-<div class="offline-banner" id="offline-banner"></div>
+<div class="offline-banner" id="offline-banner"><span id="offline-banner-text"></span><button class="retry-btn" id="retry-btn" onclick="_syncPending()" style="display:none">Reintentar</button></div>
 
 <div id="list"></div>
 
@@ -351,26 +366,31 @@ function _enqueuePending(op) {
   _updateOfflineBanner();
 }
 
-function _updateOfflineBanner(msg) {
+function _updateOfflineBanner(msg, showRetry) {
   const el = document.getElementById('offline-banner');
-  if (!el) return;
+  const textEl = document.getElementById('offline-banner-text');
+  const retryBtn = document.getElementById('retry-btn');
+  if (!el || !textEl) return;
   const pending = _getPending().length;
   if (msg !== undefined) {
-    el.textContent = msg;
+    textEl.textContent = msg;
     el.className = 'offline-banner' + (msg === 'Sincronizando...' ? ' syncing' : '');
-    el.style.display = 'block';
+    el.style.display = 'flex';
+    retryBtn.style.display = showRetry ? 'inline-block' : 'none';
     return;
   }
   if (!navigator.onLine) {
     el.className = 'offline-banner';
-    el.textContent = pending > 0
+    textEl.textContent = pending > 0
       ? `Sin conexión · ${pending} cambio${pending !== 1 ? 's' : ''} pendiente${pending !== 1 ? 's' : ''}`
       : 'Sin conexión';
-    el.style.display = 'block';
+    el.style.display = 'flex';
+    retryBtn.style.display = 'none';
   } else if (pending > 0) {
     el.className = 'offline-banner syncing';
-    el.textContent = `${pending} cambio${pending !== 1 ? 's' : ''} pendiente${pending !== 1 ? 's' : ''} de sincronizar`;
-    el.style.display = 'block';
+    textEl.textContent = `${pending} cambio${pending !== 1 ? 's' : ''} pendiente${pending !== 1 ? 's' : ''} de sincronizar`;
+    el.style.display = 'flex';
+    retryBtn.style.display = 'none';
   } else {
     el.style.display = 'none';
   }
@@ -396,9 +416,11 @@ async function _syncPending() {
       ops.shift();
       _savePending(ops);
     } catch(e) {
-      toast('Error al sincronizar offline');
-      _updateOfflineBanner();
       _syncing = false;
+      _updateOfflineBanner('Error al sincronizar — reintentando…', true);
+      setTimeout(() => {
+        if (_getPending().length > 0 && !_syncing) _syncPending();
+      }, 5000);
       return;
     }
   }
