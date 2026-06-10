@@ -306,23 +306,21 @@
 
 <script>
 // ── Config ────────────────────────────────────────────────────────
-// Por defecto: mismo origen (Railway sirve frontend y API juntos)
-// La API Key se puede pasar como ?api_key=... en la URL, o desde ⚙️
-const API = localStorage.getItem('lista_api_url') || '';
-
-// Leer API key: primero de URL, luego de localStorage
+// Leer API key desde URL (?api_key=...) y guardarla en localStorage
 const urlParams = new URLSearchParams(window.location.search);
 const urlApiKey = urlParams.get('api_key');
 if (urlApiKey) {
   localStorage.setItem('lista_api_key', urlApiKey);
-  // Limpiar URL sin recargar
   window.history.replaceState({}, '', window.location.pathname);
 }
-const API_KEY = localStorage.getItem('lista_api_key') || '';
+
+function getAPI() { return localStorage.getItem('lista_api_url') || ''; }
+function getAPIKey() { return localStorage.getItem('lista_api_key') || ''; }
 
 function apiHeaders() {
   const h = {'Content-Type': 'application/json'};
-  if (API_KEY) h['X-API-Key'] = API_KEY;
+  const k = getAPIKey();
+  if (k) h['X-API-Key'] = k;
   return h;
 }
 
@@ -358,7 +356,7 @@ function toast(msg) {
 // ── Load ─────────────────────────────────────────────────────────
 async function loadList() {
   try {
-    const res = await fetch(`${API}/api/list`);
+    const res = await fetch(`${getAPI()}/api/list`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     render(data.items || []);
@@ -402,7 +400,7 @@ async function toggleCheck(idx) {
   const item = items[idx];
   item.checked = !item.checked;
   try {
-    await fetch(`${API}/api/check`, {
+    await fetch(`${getAPI()}/api/check`, {
       method: 'POST',
       headers: apiHeaders(),
       body: JSON.stringify({name: item.name, checked: item.checked})
@@ -421,7 +419,7 @@ async function addItem() {
   input.value = '';
   input.focus();
   try {
-    const res = await fetch(`${API}/api/add`, {
+    const res = await fetch(`${getAPI()}/api/add`, {
       method: 'POST',
       headers: apiHeaders(),
       body: JSON.stringify({name})
@@ -441,7 +439,7 @@ async function removeItem(idx) {
   const item = items[idx];
   if (!item) return;
   try {
-    await fetch(`${API}/api/remove`, {
+    await fetch(`${getAPI()}/api/remove`, {
       method: 'POST',
       headers: apiHeaders(),
       body: JSON.stringify({name: item.name})
@@ -456,7 +454,7 @@ async function removeItem(idx) {
 async function resetList() {
   if (!confirm('¿Vaciar toda la lista?')) return;
   try {
-    await fetch(`${API}/api/reset`, {
+    await fetch(`${getAPI()}/api/reset`, {
       method: 'POST',
       headers: apiHeaders()
     });

@@ -27,21 +27,27 @@ from flask_cors import CORS
 
 # ── Config ──────────────────────────────────────────────────────────
 
-# Try DATABASE_URL first, then build from individual PG* env vars
-DATABASE_URL = (
-    os.environ.get("DATABASE_URL")
-    or ""
-)
-
-# Fallback: build from individual Postgres env vars
-if not DATABASE_URL:
+def _resolve_database_url() -> str:
+    raw = os.environ.get("DATABASE_URL", "")
+    # Guard: strip accidental key=value prefix (e.g. "DATABASE_URL=postgresql://...")
+    if raw.startswith("DATABASE_URL="):
+        raw = raw[len("DATABASE_URL="):]
+    # Railway provides postgres:// but psycopg2/libpq requires postgresql://
+    if raw.startswith("postgres://"):
+        raw = "postgresql://" + raw[len("postgres://"):]
+    if raw:
+        return raw
+    # Fallback: build from individual PG* env vars
     pg_host = os.environ.get("PGHOST")
     pg_port = os.environ.get("PGPORT")
     pg_user = os.environ.get("PGUSER") or os.environ.get("POSTGRES_USER")
     pg_pass = os.environ.get("PGPASSWORD") or os.environ.get("POSTGRES_PASSWORD")
     pg_db = os.environ.get("PGDATABASE") or os.environ.get("POSTGRES_DB")
     if all([pg_host, pg_port, pg_user, pg_pass, pg_db]):
-        DATABASE_URL = f"postgresql://{pg_user}:{pg_pass}@{pg_host}:{pg_port}/{pg_db}"
+        return f"postgresql://{pg_user}:{pg_pass}@{pg_host}:{pg_port}/{pg_db}"
+    return ""
+
+DATABASE_URL = _resolve_database_url()
 
 API_KEY = os.environ.get("API_KEY", "")
 PORT = int(os.environ.get("PORT", 8767))
@@ -227,15 +233,9 @@ def serve_frontend():
 
 @app.route("/health")
 def health():
-    # Debug: expose raw DATABASE_URL (masked)
-    raw_url = os.environ.get("DATABASE_URL", "")
-    import re
-    masked = re.sub(r'(://[^:]+:)([^@]+)(@)', r'\1***\3', raw_url[:120]) if raw_url else "(empty)"
-    
     db_ok = False
     db_info = "no DATABASE_URL configured"
     if DATABASE_URL:
-        db_info = f"DATABASE_URL set (len={len(DATABASE_URL)}, prefix={DATABASE_URL[:15]}...)"
         try:
             conn = get_db()
             cur = conn.cursor()
@@ -243,21 +243,14 @@ def health():
             cur.close()
             conn.close()
             db_ok = True
-            db_info = f"connected ({DATABASE_URL[:15]}...)"
+            db_info = "connected"
         except Exception as e:
-            db_info = f"connection failed: {str(e)[:100]}"
-    
-    # Debug env vars (without values)
-    pg_vars = {k: "set" if os.environ.get(k) else "not set" 
-               for k in ["DATABASE_URL", "PGHOST", "PGPORT", "PGUSER", "PGPASSWORD", "PGDATABASE", "POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB"]}
-    
+            db_info = f"connection failed: {str(e)[:120]}"
     return jsonify({
         "status": "ok",
         "service": "lista-compra-v2",
         "database": "connected" if db_ok else "disconnected",
         "db_info": db_info,
-        "db_url_debug": masked,
-        "pg_vars": pg_vars,
     })
 
 
