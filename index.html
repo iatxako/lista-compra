@@ -55,53 +55,63 @@
     align-items: center;
     gap: 8px;
   }
-  .subtitle {
-    color: var(--muted);
-    font-size: 0.85rem;
-    margin-bottom: 20px;
+  .subtitle { color: var(--muted); font-size: 0.85rem; margin-bottom: 20px; }
+
+  /* Category groups */
+  .cat-group { margin-bottom: 16px; }
+  .cat-group.all-done { opacity: 0.6; }
+  .cat-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 4px;
+    margin-bottom: 6px;
   }
+  .cat-header-emoji { font-size: 1.1rem; }
+  .cat-header-label { font-size: 0.82rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); flex: 1; }
+  .cat-header-count { font-size: 0.78rem; color: var(--muted); }
+
+  /* Items */
   .item {
     background: var(--card);
     border-radius: 12px;
     padding: 14px 16px;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
     box-shadow: var(--shadow);
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 12px;
     transition: opacity 0.2s, transform 0.15s;
     cursor: pointer;
     user-select: none;
     min-height: 52px;
   }
   .item:active { transform: scale(0.98); }
-  .item.checked { opacity: 0.55; }
+  .item.checked { opacity: 0.5; }
   .item.checked .item-name { text-decoration: line-through; color: var(--muted); }
   .checkbox {
-    width: 28px;
-    height: 28px;
+    width: 28px; height: 28px;
     border-radius: 8px;
     border: 2.5px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 16px;
-    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; flex-shrink: 0;
     transition: all 0.15s;
   }
   .item.checked .checkbox { background: var(--green); border-color: var(--green); color: white; }
   .item-name { flex: 1; font-size: 1.05rem; font-weight: 500; }
   .item-added { color: var(--muted); font-size: 0.75rem; flex-shrink: 0; }
-  .item.pending-op .item-name { opacity: 0.7; }
+  .cat-btn {
+    background: none; border: none;
+    font-size: 1rem; padding: 4px 4px;
+    cursor: pointer; opacity: 0.45;
+    transition: opacity 0.15s; flex-shrink: 0;
+  }
+  .cat-btn:active { opacity: 1; }
   .delete-btn {
-    background: none;
-    border: none;
-    color: var(--red);
-    font-size: 1.2rem;
-    padding: 4px 8px;
-    cursor: pointer;
-    opacity: 0.5;
-    transition: opacity 0.15s;
+    background: none; border: none;
+    color: var(--red); font-size: 1.2rem;
+    padding: 4px 8px; cursor: pointer;
+    opacity: 0.5; transition: opacity 0.15s;
   }
   .delete-btn:active { opacity: 1; }
 
@@ -109,8 +119,7 @@
   .offline-banner {
     display: none;
     padding: 9px 16px;
-    font-size: 0.82rem;
-    font-weight: 600;
+    font-size: 0.82rem; font-weight: 600;
     text-align: center;
     border-radius: 8px;
     margin-bottom: 12px;
@@ -121,49 +130,25 @@
 
   /* Bottom panel */
   .bottom-panel {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    max-width: 600px;
-    margin: 0 auto;
+    position: fixed; bottom: 0; left: 0; right: 0;
+    max-width: 600px; margin: 0 auto;
     background: var(--card);
     box-shadow: 0 -2px 12px rgba(0,0,0,0.1);
     padding-bottom: max(0px, env(safe-area-inset-bottom));
   }
-
-  /* Add form */
-  .add-form {
-    display: flex;
-    gap: 8px;
-    padding: 12px 16px;
-  }
+  .add-form { display: flex; gap: 8px; padding: 12px 16px; }
   .add-form input {
-    flex: 1;
-    padding: 12px 16px;
-    border: 2px solid var(--border);
-    border-radius: 10px;
-    font-size: 1rem;
-    outline: none;
-    transition: border-color 0.15s;
+    flex: 1; padding: 12px 16px;
+    border: 2px solid var(--border); border-radius: 10px;
+    font-size: 1rem; outline: none; transition: border-color 0.15s;
   }
   .add-form input:focus { border-color: var(--blue); }
-  .input-error {
-    font-size: 0.78rem;
-    color: var(--red);
-    padding: 0 16px 6px;
-    display: none;
-  }
+  .input-error { font-size: 0.78rem; color: var(--red); padding: 0 16px 6px; display: none; }
   .input-error.show { display: block; }
   .add-form button {
-    background: var(--blue);
-    color: white;
-    border: none;
-    border-radius: 10px;
-    padding: 12px 20px;
-    font-size: 1rem;
-    font-weight: 600;
-    cursor: pointer;
+    background: var(--blue); color: white; border: none;
+    border-radius: 10px; padding: 12px 20px;
+    font-size: 1rem; font-weight: 600; cursor: pointer;
     transition: background 0.15s;
   }
   .add-form button:active { background: #1558b0; }
@@ -174,83 +159,77 @@
 
   /* Toast */
   .toast {
-    position: fixed;
-    top: 20px;
-    left: 50%;
+    position: fixed; top: 20px; left: 50%;
     transform: translateX(-50%);
-    background: #333;
-    color: white;
-    padding: 10px 20px;
-    border-radius: 8px;
-    font-size: 0.85rem;
-    opacity: 0;
-    transition: opacity 0.3s;
-    z-index: 100;
-    pointer-events: none;
+    background: #333; color: white;
+    padding: 10px 20px; border-radius: 8px;
+    font-size: 0.85rem; opacity: 0; transition: opacity 0.3s;
+    z-index: 100; pointer-events: none;
   }
   .toast.show { opacity: 1; }
 
   .settings-icon {
-    position: fixed;
-    top: 16px;
-    right: 16px;
-    background: none;
-    border: none;
-    font-size: 1.3rem;
-    cursor: pointer;
-    opacity: 0.5;
-    transition: opacity 0.15s;
-    z-index: 50;
+    position: fixed; top: 16px; right: 16px;
+    background: none; border: none; font-size: 1.3rem;
+    cursor: pointer; opacity: 0.5; transition: opacity 0.15s; z-index: 50;
   }
   .settings-icon:active { opacity: 1; }
 
   /* Suggestions */
-  .suggestions-section {
-    padding: 8px 16px 6px;
-    border-bottom: 1px solid var(--border);
-  }
+  .suggestions-section { padding: 8px 16px 6px; border-bottom: 1px solid var(--border); }
   .suggestions-label {
-    font-size: 0.68rem;
-    font-weight: 700;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    margin-bottom: 6px;
+    font-size: 0.68rem; font-weight: 700; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px;
   }
   .suggestions-chips {
-    display: flex;
-    gap: 8px;
-    overflow-x: auto;
-    padding-bottom: 2px;
-    scrollbar-width: none;
-    align-items: center;
+    display: flex; gap: 8px; overflow-x: auto;
+    padding-bottom: 2px; scrollbar-width: none; align-items: center;
   }
   .suggestions-chips::-webkit-scrollbar { display: none; }
   .chip {
-    display: flex;
-    align-items: center;
-    background: var(--bg);
-    border: 1.5px solid var(--border);
-    border-radius: 20px;
-    padding: 7px 14px;
-    white-space: nowrap;
-    flex-shrink: 0;
-    cursor: pointer;
-    transition: background 0.15s, border-color 0.15s;
-    user-select: none;
+    display: flex; align-items: center;
+    background: var(--bg); border: 1.5px solid var(--border);
+    border-radius: 20px; padding: 7px 14px;
+    white-space: nowrap; flex-shrink: 0; cursor: pointer;
+    transition: background 0.15s, border-color 0.15s; user-select: none;
   }
   .chip:active { background: var(--border); }
   .chip-name { font-size: 0.88rem; font-weight: 500; }
   .chip-clear {
-    background: none;
-    border: none;
-    color: var(--muted);
-    font-size: 0.78rem;
-    cursor: pointer;
-    padding: 7px 10px;
-    white-space: nowrap;
-    flex-shrink: 0;
+    background: none; border: none; color: var(--muted);
+    font-size: 0.78rem; cursor: pointer; padding: 7px 10px;
+    white-space: nowrap; flex-shrink: 0;
   }
+
+  /* Category picker */
+  .cat-picker {
+    position: fixed; inset: 0; z-index: 200;
+    display: none; flex-direction: column; justify-content: flex-end;
+  }
+  .cat-picker.open { display: flex; }
+  .cat-picker-backdrop { flex: 1; background: rgba(0,0,0,0.45); }
+  .cat-picker-sheet {
+    background: var(--card);
+    border-radius: 20px 20px 0 0;
+    padding: 20px 16px max(20px, env(safe-area-inset-bottom));
+    max-height: 72vh; overflow-y: auto;
+  }
+  .cat-picker-title { font-weight: 700; font-size: 0.95rem; text-align: center; margin-bottom: 16px; color: var(--muted); }
+  .cat-picker-item { font-weight: 700; font-size: 1rem; text-align: center; margin-bottom: 16px; }
+  .cat-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+  }
+  .cat-option {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 12px 6px; border-radius: 12px;
+    border: 2px solid var(--border); cursor: pointer; gap: 5px;
+    transition: border-color 0.15s, background 0.15s;
+    user-select: none;
+  }
+  .cat-option:active { background: var(--bg); }
+  .cat-option.selected { border-color: var(--blue); background: rgba(25,113,194,0.08); }
+  .cat-option-emoji { font-size: 1.7rem; }
+  .cat-option-label { font-size: 0.68rem; font-weight: 600; text-align: center; color: var(--muted); line-height: 1.2; }
 </style>
 </head>
 <body>
@@ -276,11 +255,150 @@
   </div>
 </div>
 
+<!-- Category picker -->
+<div class="cat-picker" id="cat-picker">
+  <div class="cat-picker-backdrop" onclick="closeCatPicker()"></div>
+  <div class="cat-picker-sheet">
+    <div class="cat-picker-title">Categoría</div>
+    <div class="cat-picker-item" id="cat-picker-item-name"></div>
+    <div class="cat-grid" id="cat-grid"></div>
+  </div>
+</div>
+
 <script>
-// ── State ────────────────────────────────────────────────────────
+// ── Categories ────────────────────────────────────────────────────
+const CATEGORIES = [
+  {id: 'fruta_verdura', label: 'Fruta y verdura', emoji: '🥦'},
+  {id: 'lacteos',       label: 'Lácteos',          emoji: '🥛'},
+  {id: 'carne_pescado', label: 'Carne y pescado',  emoji: '🥩'},
+  {id: 'pan_bolleria',  label: 'Pan y bollería',   emoji: '🍞'},
+  {id: 'bebidas',       label: 'Bebidas',           emoji: '🥤'},
+  {id: 'limpieza',      label: 'Limpieza',          emoji: '🧹'},
+  {id: 'higiene',       label: 'Higiene',           emoji: '🧴'},
+  {id: 'congelados',    label: 'Congelados',        emoji: '🧊'},
+  {id: 'otros',         label: 'Otros',             emoji: '🛒'},
+];
+
+const AUTO_MAP = {
+  // Fruta y verdura
+  'manzana':   'fruta_verdura', 'manzanas':  'fruta_verdura',
+  'pera':      'fruta_verdura', 'peras':     'fruta_verdura',
+  'naranja':   'fruta_verdura', 'naranjas':  'fruta_verdura',
+  'limón':     'fruta_verdura', 'limones':   'fruta_verdura',
+  'plátano':   'fruta_verdura', 'plátanos':  'fruta_verdura',
+  'uva':       'fruta_verdura', 'uvas':      'fruta_verdura',
+  'fresa':     'fruta_verdura', 'fresas':    'fruta_verdura',
+  'mango':     'fruta_verdura', 'mangos':    'fruta_verdura',
+  'aguacate':  'fruta_verdura', 'aguacates': 'fruta_verdura',
+  'lechuga':   'fruta_verdura', 'lechugas':  'fruta_verdura',
+  'tomate':    'fruta_verdura', 'tomates':   'fruta_verdura',
+  'pepino':    'fruta_verdura', 'pepinos':   'fruta_verdura',
+  'cebolla':   'fruta_verdura', 'cebollas':  'fruta_verdura',
+  'ajo':       'fruta_verdura', 'ajos':      'fruta_verdura',
+  'zanahoria': 'fruta_verdura', 'zanahorias':'fruta_verdura',
+  'patata':    'fruta_verdura', 'patatas':   'fruta_verdura',
+  'verduras':  'fruta_verdura', 'verdura':   'fruta_verdura',
+  'pimiento':  'fruta_verdura', 'pimientos': 'fruta_verdura',
+  'brócoli':   'fruta_verdura', 'brocoli':   'fruta_verdura',
+  'espinacas': 'fruta_verdura', 'coliflor':  'fruta_verdura',
+  'calabacín': 'fruta_verdura', 'calabacin': 'fruta_verdura',
+  'champiñón': 'fruta_verdura', 'champiñones':'fruta_verdura',
+  'sandía':    'fruta_verdura', 'melón':     'fruta_verdura',
+  // Lácteos
+  'leche':         'lacteos', 'yogur':      'lacteos',
+  'yogures':       'lacteos', 'yoghurt':    'lacteos',
+  'queso':         'lacteos', 'quesos':     'lacteos',
+  'mantequilla':   'lacteos', 'nata':       'lacteos',
+  'kéfir':         'lacteos', 'kefir':      'lacteos',
+  'cuajada':       'lacteos', 'batido':     'lacteos',
+  'batidos':       'lacteos', 'natillas':   'lacteos',
+  'flan':          'lacteos', 'petit':      'lacteos',
+  // Carne y pescado
+  'pollo':         'carne_pescado', 'ternera':    'carne_pescado',
+  'cerdo':         'carne_pescado', 'carne':      'carne_pescado',
+  'fiambre':       'carne_pescado', 'jamón':      'carne_pescado',
+  'jamon':         'carne_pescado', 'salchichas': 'carne_pescado',
+  'chorizo':       'carne_pescado', 'lomo':       'carne_pescado',
+  'pavo':          'carne_pescado', 'pechuga':    'carne_pescado',
+  'salmón':        'carne_pescado', 'salmon':     'carne_pescado',
+  'merluza':       'carne_pescado', 'bacalao':    'carne_pescado',
+  'atún':          'carne_pescado', 'atun':       'carne_pescado',
+  'sardinas':      'carne_pescado', 'gambas':     'carne_pescado',
+  'mejillones':    'carne_pescado', 'sepia':      'carne_pescado',
+  'calamar':       'carne_pescado', 'rape':       'carne_pescado',
+  'dorada':        'carne_pescado', 'lubina':     'carne_pescado',
+  'costillas':     'carne_pescado', 'morcilla':   'carne_pescado',
+  'salchichón':    'carne_pescado', 'fuet':       'carne_pescado',
+  // Pan y bollería
+  'pan':       'pan_bolleria', 'barra':      'pan_bolleria',
+  'baguette':  'pan_bolleria', 'croissant':  'pan_bolleria',
+  'galletas':  'pan_bolleria', 'galleta':    'pan_bolleria',
+  'magdalenas':'pan_bolleria', 'magdalena':  'pan_bolleria',
+  'bizcocho':  'pan_bolleria', 'tostadas':   'pan_bolleria',
+  'tostada':   'pan_bolleria', 'bollería':   'pan_bolleria',
+  'rosquillas':'pan_bolleria', 'napolitana': 'pan_bolleria',
+  // Bebidas
+  'agua':      'bebidas', 'aguas':      'bebidas',
+  'cerveza':   'bebidas', 'cervezas':   'bebidas',
+  'vino':      'bebidas', 'vinos':      'bebidas',
+  'refresco':  'bebidas', 'refrescos':  'bebidas',
+  'zumo':      'bebidas', 'zumos':      'bebidas',
+  'café':      'bebidas', 'cafe':       'bebidas',
+  'cola cao':  'bebidas', 'nesquik':    'bebidas',
+  'té':        'bebidas', 'te':         'bebidas',
+  'infusión':  'bebidas', 'infusiones': 'bebidas',
+  'cerveza sin':'bebidas',
+  // Limpieza
+  'lejía':          'limpieza', 'legia':         'limpieza',
+  'lavavajillas':   'limpieza', 'ariel':         'limpieza',
+  'skip':           'limpieza', 'bold':          'limpieza',
+  'fairy':          'limpieza', 'mistol':        'limpieza',
+  'mr proper':      'limpieza', 'ajax':          'limpieza',
+  'cillit':         'limpieza', 'domestos':      'limpieza',
+  'sanitol':        'limpieza', 'fregasuelos':   'limpieza',
+  'papel wc':       'limpieza', 'papel de cocina':'limpieza',
+  'papel cocina':   'limpieza', 'bolsas basura': 'limpieza',
+  'suavizante':     'limpieza', 'detergente':    'limpieza',
+  'limpiador':      'limpieza', 'limpiacristales':'limpieza',
+  'bayeta':         'limpieza', 'bayetas':       'limpieza',
+  'estropajo':      'limpieza', 'estropajos':    'limpieza',
+  'friegaplatos':   'limpieza', 'quitagrasas':   'limpieza',
+  // Higiene
+  'champú':      'higiene', 'champu':       'higiene',
+  'gel':         'higiene', 'gel de baño':  'higiene',
+  'jabón':       'higiene', 'jabon':        'higiene',
+  'pasta dientes':'higiene','dentífrico':   'higiene',
+  'desodorante': 'higiene', 'colonia':      'higiene',
+  'maquinilla':  'higiene', 'cuchillas':    'higiene',
+  'toallitas':   'higiene', 'compresas':    'higiene',
+  'tampones':    'higiene', 'pañales':      'higiene',
+  'crema':       'higiene', 'hidratante':   'higiene',
+  'sun cream':   'higiene', 'protector solar':'higiene',
+  'colutorios':  'higiene', 'hilo dental':  'higiene',
+  // Congelados
+  'helado':    'congelados', 'helados':   'congelados',
+  'pizza':     'congelados', 'lasaña':    'congelados',
+  'croquetas': 'congelados', 'nuggets':   'congelados',
+  'canelones': 'congelados',
+};
+
+function _autoCategory(name) {
+  return AUTO_MAP[name.toLowerCase().trim()] || null;
+}
+
+function _catInfo(id) {
+  return CATEGORIES.find(c => c.id === id) || CATEGORIES[CATEGORIES.length - 1];
+}
+
+function _resolveCategory(item) {
+  return item.category || _autoCategory(item.name) || null;
+}
+
+// ── State ─────────────────────────────────────────────────────────
 let _items = [];
 let _isOnline = navigator.onLine;
 let _syncing = false;
+let _bootstrapped = false;
 
 // ── Config ────────────────────────────────────────────────────────
 const urlParams = new URLSearchParams(window.location.search);
@@ -289,7 +407,7 @@ if (urlApiKey) {
   localStorage.setItem('lista_api_key', urlApiKey);
   window.history.replaceState({}, '', window.location.pathname);
 }
-function getAPI() { return localStorage.getItem('lista_api_url') || ''; }
+function getAPI()    { return localStorage.getItem('lista_api_url') || ''; }
 function getAPIKey() { return localStorage.getItem('lista_api_key') || ''; }
 function apiHeaders() {
   const h = {'Content-Type': 'application/json'};
@@ -298,28 +416,31 @@ function apiHeaders() {
   return h;
 }
 
-// ── Pending queue ────────────────────────────────────────────────
-function _getPending() { return JSON.parse(localStorage.getItem('lista_pending') || '[]'); }
+// ── Pending queue ─────────────────────────────────────────────────
+function _getPending()     { return JSON.parse(localStorage.getItem('lista_pending') || '[]'); }
 function _savePending(ops) { localStorage.setItem('lista_pending', JSON.stringify(ops)); }
-function _enqueue(op) { const ops = _getPending(); ops.push(op); _savePending(ops); }
-function _dequeue() { const ops = _getPending(); ops.shift(); _savePending(ops); }
+function _enqueue(op)      { const ops = _getPending(); ops.push(op); _savePending(ops); }
+function _dequeue()        { const ops = _getPending(); ops.shift(); _savePending(ops); }
 
-// ── Cache (last known server state) ──────────────────────────────
+// ── Cache ─────────────────────────────────────────────────────────
 function _saveCache(items) { localStorage.setItem('lista_cache', JSON.stringify(items)); }
-function _loadCache() { return JSON.parse(localStorage.getItem('lista_cache') || '[]'); }
+function _loadCache()      { return JSON.parse(localStorage.getItem('lista_cache') || '[]'); }
 
-// ── Merge server state + pending queue ───────────────────────────
+// ── Merge server state + pending queue ────────────────────────────
 function _merge(serverItems) {
   let items = serverItems.map(i => ({...i}));
   for (const op of _getPending()) {
     if (op.type === 'add') {
       if (!items.find(i => i.name === op.name))
-        items.push({name: op.name, added: op.added || '', checked: false});
+        items.push({name: op.name, added: op.added || '', checked: false, category: op.category || null});
     } else if (op.type === 'check') {
       const item = items.find(i => i.name === op.name);
       if (item) item.checked = op.checked;
     } else if (op.type === 'remove') {
       items = items.filter(i => i.name !== op.name);
+    } else if (op.type === 'category') {
+      const item = items.find(i => i.name === op.name);
+      if (item) item.category = op.category;
     }
   }
   return items;
@@ -330,29 +451,15 @@ function _updateBanner() {
   const el = document.getElementById('offline-banner');
   if (!el) return;
   const n = _getPending().length;
-  const pendingTxt = n => `${n} cambio${n !== 1 ? 's' : ''} pendiente${n !== 1 ? 's' : ''}`;
-  if (!_isOnline && n > 0) {
-    el.className = 'offline-banner offline';
-    el.textContent = `Sin conexión · ${pendingTxt(n)}`;
-    el.style.display = 'block';
-  } else if (!_isOnline) {
-    el.className = 'offline-banner offline';
-    el.textContent = 'Sin conexión';
-    el.style.display = 'block';
-  } else if (_syncing) {
-    el.className = 'offline-banner syncing';
-    el.textContent = `Sincronizando ${pendingTxt(n)}…`;
-    el.style.display = 'block';
-  } else if (n > 0) {
-    el.className = 'offline-banner pending';
-    el.textContent = `${pendingTxt(n)} · reintentando…`;
-    el.style.display = 'block';
-  } else {
-    el.style.display = 'none';
-  }
+  const txt = n => `${n} cambio${n !== 1 ? 's' : ''} pendiente${n !== 1 ? 's' : ''}`;
+  if (!_isOnline && n > 0)   { el.className = 'offline-banner offline'; el.textContent = `Sin conexión · ${txt(n)}`; el.style.display = 'block'; }
+  else if (!_isOnline)        { el.className = 'offline-banner offline'; el.textContent = 'Sin conexión'; el.style.display = 'block'; }
+  else if (_syncing)          { el.className = 'offline-banner syncing'; el.textContent = `Sincronizando ${txt(n)}…`; el.style.display = 'block'; }
+  else if (n > 0)             { el.className = 'offline-banner pending'; el.textContent = `${txt(n)} · reintentando…`; el.style.display = 'block'; }
+  else                        { el.style.display = 'none'; }
 }
 
-// ── Sync pending queue ────────────────────────────────────────────
+// ── Sync ──────────────────────────────────────────────────────────
 async function _syncPending() {
   if (_syncing || !_isOnline) return;
   if (!_getPending().length) return;
@@ -362,9 +469,10 @@ async function _syncPending() {
     const op = _getPending()[0];
     try {
       let url, body;
-      if      (op.type === 'add')    { url = `${getAPI()}/api/add`;    body = {name: op.name}; }
-      else if (op.type === 'check')  { url = `${getAPI()}/api/check`;  body = {name: op.name, checked: op.checked}; }
-      else if (op.type === 'remove') { url = `${getAPI()}/api/remove`; body = {name: op.name}; }
+      if      (op.type === 'add')      { url = `${getAPI()}/api/add`;      body = {name: op.name, category: op.category || null}; }
+      else if (op.type === 'check')    { url = `${getAPI()}/api/check`;    body = {name: op.name, checked: op.checked}; }
+      else if (op.type === 'remove')   { url = `${getAPI()}/api/remove`;   body = {name: op.name}; }
+      else if (op.type === 'category') { url = `${getAPI()}/api/category`; body = {name: op.name, category: op.category}; }
       else { _dequeue(); continue; }
       const res = await fetch(url, {method: 'POST', headers: apiHeaders(), body: JSON.stringify(body)});
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -378,6 +486,21 @@ async function _syncPending() {
   }
   _syncing = false;
   _updateBanner();
+}
+
+// ── Bootstrap categories for existing items ───────────────────────
+async function _bootstrapCategories(serverItems) {
+  if (_bootstrapped) return;
+  _bootstrapped = true;
+  const toUpdate = serverItems.filter(i => !i.category && _autoCategory(i.name));
+  for (const item of toUpdate) {
+    try {
+      await fetch(`${getAPI()}/api/category`, {
+        method: 'POST', headers: apiHeaders(),
+        body: JSON.stringify({name: item.name, category: _autoCategory(item.name)})
+      });
+    } catch(e) {}
+  }
 }
 
 // ── Online / offline events ───────────────────────────────────────
@@ -403,7 +526,7 @@ async function loadSuggestions() {
 }
 function renderSuggestions() {
   const section = document.getElementById('suggestions-section');
-  const chips = document.getElementById('suggestions-chips');
+  const chips   = document.getElementById('suggestions-chips');
   const visible = _suggestions.filter(s => !_dismissed.has(s.name));
   if (!visible.length) { section.style.display = 'none'; return; }
   section.style.display = 'block';
@@ -414,7 +537,7 @@ function renderSuggestions() {
 }
 function clearSuggestions() { _suggestions.forEach(s => _dismissed.add(s.name)); renderSuggestions(); }
 
-// ── Input error / toast / subtitle ───────────────────────────────
+// ── Toast / input error / subtitle ───────────────────────────────
 let _errorTimer = null;
 function showInputError() {
   const el = document.getElementById('input-error');
@@ -430,31 +553,114 @@ function toast(msg) {
 }
 function updateSubtitle() {
   const total = _items.length;
-  const done = _items.filter(i => i.checked).length;
+  const done  = _items.filter(i => i.checked).length;
   document.getElementById('subtitle').textContent =
     total > 0 ? `${done} de ${total} comprados` : 'Lista vacía';
 }
 
-// ── Render ────────────────────────────────────────────────────────
+// ── Render (grouped) ──────────────────────────────────────────────
 function render(items) {
   const container = document.getElementById('list');
   if (!items.length) {
     container.innerHTML = `<div class="empty"><div class="emoji">🛒</div>Lista vacía<br><span style="font-size:0.85rem">Añade items abajo</span></div>`;
     return;
   }
-  container.innerHTML = items.map((item, idx) => `
-    <div class="item ${item.checked ? 'checked' : ''}" data-index="${idx}" onclick="toggleCheck(${idx})">
-      <div class="checkbox">${item.checked ? '✓' : ''}</div>
-      <span class="item-name">${escapeHtml(item.name)}</span>
-      <span class="item-added">${item.added || ''}</span>
-      <button class="delete-btn" onclick="event.stopPropagation(); removeItem(${idx})">✕</button>
-    </div>
-  `).join('');
+
+  // Build groups
+  const groups = new Map();
+  for (const item of items) {
+    const cat = _resolveCategory(item) || 'otros';
+    if (!groups.has(cat)) groups.set(cat, []);
+    groups.get(cat).push(item);
+  }
+
+  // Sort: groups with more unchecked first, 'otros' last
+  const sorted = [...groups.entries()].sort(([a, ia], [b, ib]) => {
+    if (a === 'otros' && b !== 'otros') return 1;
+    if (b === 'otros' && a !== 'otros') return -1;
+    const ua = ia.filter(i => !i.checked).length;
+    const ub = ib.filter(i => !i.checked).length;
+    return ub - ua;
+  });
+
+  let html = '';
+  for (const [cat, catItems] of sorted) {
+    const info   = _catInfo(cat);
+    const done   = catItems.filter(i => i.checked).length;
+    const total  = catItems.length;
+    const allDone = done === total;
+    html += `<div class="cat-group${allDone ? ' all-done' : ''}">`;
+    html += `<div class="cat-header">
+      <span class="cat-header-emoji">${info.emoji}</span>
+      <span class="cat-header-label">${escapeHtml(info.label)}</span>
+      <span class="cat-header-count">${done}/${total}</span>
+    </div>`;
+    for (const item of catItems) {
+      const idx  = items.indexOf(item);
+      const info = _catInfo(_resolveCategory(item) || 'otros');
+      html += `<div class="item${item.checked ? ' checked' : ''}" data-index="${idx}" onclick="toggleCheck(${idx})">
+        <div class="checkbox">${item.checked ? '✓' : ''}</div>
+        <span class="item-name">${escapeHtml(item.name)}</span>
+        <span class="item-added">${item.added || ''}</span>
+        <button class="cat-btn" onclick="event.stopPropagation();openCatPicker(${idx})" title="Categoría">${info.emoji}</button>
+        <button class="delete-btn" onclick="event.stopPropagation();removeItem(${idx})">✕</button>
+      </div>`;
+    }
+    html += '</div>';
+  }
+  container.innerHTML = html;
 }
+
 function escapeHtml(text) {
   const d = document.createElement('div');
   d.textContent = text;
   return d.innerHTML;
+}
+
+// ── Category picker ───────────────────────────────────────────────
+let _pickerIdx = null;
+
+function openCatPicker(idx) {
+  _pickerIdx = idx;
+  const item = _items[idx];
+  if (!item) return;
+  const current = _resolveCategory(item) || 'otros';
+  document.getElementById('cat-picker-item-name').textContent = item.name;
+  document.getElementById('cat-grid').innerHTML = CATEGORIES.map(c => `
+    <div class="cat-option${c.id === current ? ' selected' : ''}" onclick="applyCategory('${c.id}')">
+      <span class="cat-option-emoji">${c.emoji}</span>
+      <span class="cat-option-label">${c.label}</span>
+    </div>
+  `).join('');
+  document.getElementById('cat-picker').classList.add('open');
+}
+
+function closeCatPicker() {
+  document.getElementById('cat-picker').classList.remove('open');
+  _pickerIdx = null;
+}
+
+async function applyCategory(categoryId) {
+  closeCatPicker();
+  const item = _items[_pickerIdx !== null ? _pickerIdx : -1];
+  if (!item) return;
+  item.category = categoryId;
+  render(_items);
+  if (!_isOnline) {
+    _enqueue({type: 'category', name: item.name, category: categoryId});
+    _updateBanner();
+    return;
+  }
+  try {
+    const res = await fetch(`${getAPI()}/api/category`, {
+      method: 'POST', headers: apiHeaders(),
+      body: JSON.stringify({name: item.name, category: categoryId})
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  } catch(e) {
+    _enqueue({type: 'category', name: item.name, category: categoryId});
+    _updateBanner();
+  }
 }
 
 // ── Toggle check ──────────────────────────────────────────────────
@@ -465,121 +671,80 @@ async function toggleCheck(idx) {
   item.checked = newChecked;
   render(_items);
   updateSubtitle();
-  if (!_isOnline) {
-    _enqueue({type: 'check', name: item.name, checked: newChecked});
-    _updateBanner();
-    return;
-  }
+  if (!_isOnline) { _enqueue({type: 'check', name: item.name, checked: newChecked}); _updateBanner(); return; }
   try {
     const res = await fetch(`${getAPI()}/api/check`, {
       method: 'POST', headers: apiHeaders(),
       body: JSON.stringify({name: item.name, checked: newChecked})
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  } catch(e) {
-    _enqueue({type: 'check', name: item.name, checked: newChecked});
-    _updateBanner();
-  }
+  } catch(e) { _enqueue({type: 'check', name: item.name, checked: newChecked}); _updateBanner(); }
 }
 
 // ── Add item ──────────────────────────────────────────────────────
 async function addItem() {
   const input = document.getElementById('newItem');
-  const name = input.value.trim();
+  const name  = input.value.trim();
   if (!name) return;
   if (_items.find(i => i.name === name)) { showInputError(); return; }
-  input.value = '';
-  input.focus();
-  const today = new Date().toLocaleDateString('es-ES', {day: 'numeric', month: 'short'});
-  _items.push({name, added: today, checked: false});
-  render(_items);
-  updateSubtitle();
-  if (!_isOnline) {
-    _enqueue({type: 'add', name, added: today});
-    _updateBanner();
-    return;
-  }
+  input.value = ''; input.focus();
+  const today    = new Date().toLocaleDateString('es-ES', {day: 'numeric', month: 'short'});
+  const category = _autoCategory(name);
+  _items.push({name, added: today, checked: false, category});
+  render(_items); updateSubtitle();
+  if (!_isOnline) { _enqueue({type: 'add', name, added: today, category}); _updateBanner(); return; }
   try {
     const res = await fetch(`${getAPI()}/api/add`, {
       method: 'POST', headers: apiHeaders(),
-      body: JSON.stringify({name})
+      body: JSON.stringify({name, category})
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  } catch(e) {
-    _enqueue({type: 'add', name, added: today});
-    _updateBanner();
-  }
+  } catch(e) { _enqueue({type: 'add', name, added: today, category}); _updateBanner(); }
 }
 
 // ── Add from suggestion ───────────────────────────────────────────
 async function addFromSuggestion(name) {
   if (_items.find(i => i.name === name)) { _dismissed.add(name); renderSuggestions(); return; }
-  _dismissed.add(name);
-  renderSuggestions();
-  const today = new Date().toLocaleDateString('es-ES', {day: 'numeric', month: 'short'});
-  _items.push({name, added: today, checked: false});
-  render(_items);
-  updateSubtitle();
-  if (!_isOnline) {
-    _enqueue({type: 'add', name, added: today});
-    _updateBanner();
-    return;
-  }
+  _dismissed.add(name); renderSuggestions();
+  const today    = new Date().toLocaleDateString('es-ES', {day: 'numeric', month: 'short'});
+  const category = _autoCategory(name);
+  _items.push({name, added: today, checked: false, category});
+  render(_items); updateSubtitle();
+  if (!_isOnline) { _enqueue({type: 'add', name, added: today, category}); _updateBanner(); return; }
   try {
     const res = await fetch(`${getAPI()}/api/add`, {
       method: 'POST', headers: apiHeaders(),
-      body: JSON.stringify({name})
+      body: JSON.stringify({name, category})
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  } catch(e) {
-    _enqueue({type: 'add', name, added: today});
-    _updateBanner();
-  }
+  } catch(e) { _enqueue({type: 'add', name, added: today, category}); _updateBanner(); }
 }
 
 // ── Remove item ───────────────────────────────────────────────────
 async function removeItem(idx) {
   if (!_items[idx]) return;
   const item = _items[idx];
-  _items.splice(idx, 1);
-  render(_items);
-  updateSubtitle();
-  if (!_isOnline) {
-    _enqueue({type: 'remove', name: item.name});
-    _updateBanner();
-    return;
-  }
+  _items.splice(idx, 1); render(_items); updateSubtitle();
+  if (!_isOnline) { _enqueue({type: 'remove', name: item.name}); _updateBanner(); return; }
   try {
     const res = await fetch(`${getAPI()}/api/remove`, {
       method: 'POST', headers: apiHeaders(),
       body: JSON.stringify({name: item.name})
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  } catch(e) {
-    _enqueue({type: 'remove', name: item.name});
-    _updateBanner();
-  }
+  } catch(e) { _enqueue({type: 'remove', name: item.name}); _updateBanner(); }
 }
 
 // ── Reset list ────────────────────────────────────────────────────
 async function resetList() {
   if (!confirm('¿Vaciar toda la lista?')) return;
   const prev = [..._items];
-  _items = [];
-  render(_items);
-  updateSubtitle();
+  _items = []; render(_items); updateSubtitle();
   try {
     const res = await fetch(`${getAPI()}/api/reset`, {method: 'POST', headers: apiHeaders()});
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    _savePending([]);
-    _updateBanner();
-    toast('Lista vaciada');
-  } catch(e) {
-    _items = prev;
-    render(_items);
-    updateSubtitle();
-    toast('Error al vaciar');
-  }
+    _savePending([]); _updateBanner(); toast('Lista vaciada');
+  } catch(e) { _items = prev; render(_items); updateSubtitle(); toast('Error al vaciar'); }
 }
 
 // ── Keyboard shortcut ─────────────────────────────────────────────
@@ -596,25 +761,20 @@ function connectSSE() {
     updateSubtitle();
     scheduleSuggestionsRefresh();
     if (_getPending().length > 0 && !_syncing) _syncPending();
+    _bootstrapCategories(serverItems);
   };
   es.onerror = () => {
-    // If we have a cache, show it merged with pending so user sees their data
     const cached = _loadCache();
     if (cached.length > 0 && _items.length === 0) {
-      _items = _merge(cached);
-      render(_items);
-      updateSubtitle();
+      _items = _merge(cached); render(_items); updateSubtitle();
     }
   };
 }
 
 // ── Init ──────────────────────────────────────────────────────────
-// Show pending items from previous session before SSE connects
 const _cachedOnLoad = _loadCache();
 if (_cachedOnLoad.length > 0) {
-  _items = _merge(_cachedOnLoad);
-  render(_items);
-  updateSubtitle();
+  _items = _merge(_cachedOnLoad); render(_items); updateSubtitle();
 }
 _updateBanner();
 connectSSE();

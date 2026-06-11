@@ -99,6 +99,7 @@ def init_db():
                 avg_interval_days DOUBLE PRECISION
             )
         """)
+        cur.execute("ALTER TABLE catalog ADD COLUMN IF NOT EXISTS category TEXT DEFAULT NULL")
         conn.commit()
         cur.close()
         conn.close()
@@ -114,7 +115,12 @@ def load_items():
     try:
         conn = get_db()
         cur = conn.cursor()
-        cur.execute("SELECT name, added, checked FROM items ORDER BY created_at ASC")
+        cur.execute("""
+            SELECT i.name, i.added, i.checked, c.category
+            FROM items i
+            LEFT JOIN catalog c ON c.name = i.name
+            ORDER BY i.created_at ASC
+        """)
         items = [dict(r) for r in cur.fetchall()]
         cur.close()
         conn.close()
@@ -299,13 +305,15 @@ def api_add():
             "INSERT INTO items (name, added, checked) VALUES (%s, %s, FALSE) ON CONFLICT (name) DO NOTHING",
             (name, today)
         )
+        category = body.get("category")
         cur.execute("""
-            INSERT INTO catalog (name, times_added, last_added_at)
-            VALUES (%s, 1, NOW())
+            INSERT INTO catalog (name, times_added, last_added_at, category)
+            VALUES (%s, 1, NOW(), %s)
             ON CONFLICT (name) DO UPDATE
                 SET times_added = catalog.times_added + 1,
-                    last_added_at = NOW()
-        """, (name,))
+                    last_added_at = NOW(),
+                    category = COALESCE(catalog.category, EXCLUDED.category)
+        """, (name, category))
         conn.commit()
         cur.close()
         conn.close()
@@ -336,6 +344,34 @@ def api_remove():
         return jsonify({"ok": True})
     except Exception as e:
         log.error("Error removing item: %s", e)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/category", methods=["POST"])
+@require_api_key
+def api_category():
+    body = request.get_json(silent=True) or {}
+    name = body.get("name", "")
+    category = body.get("category")
+    if not name:
+        return jsonify({"error": "name required"}), 400
+    if not DATABASE_URL:
+        return jsonify({"error": "no database"}), 500
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO catalog (name, times_added, category)
+            VALUES (%s, 0, %s)
+            ON CONFLICT (name) DO UPDATE SET category = EXCLUDED.category
+        """, (name, category))
+        conn.commit()
+        cur.close()
+        conn.close()
+        _notify_clients()
+        return jsonify({"ok": True})
+    except Exception as e:
+        log.error("Error setting category: %s", e)
         return jsonify({"error": str(e)}), 500
 
 
