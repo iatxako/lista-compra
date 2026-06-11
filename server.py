@@ -20,12 +20,14 @@ import logging
 import queue
 import threading
 import time
+import hmac
+import hashlib
 from datetime import datetime
 from functools import wraps
 
 import psycopg2
 import psycopg2.extras
-from flask import Flask, request, jsonify, send_from_directory, Response, stream_with_context
+from flask import Flask, request, jsonify, send_from_directory, Response, stream_with_context, make_response
 
 # ── Config ──────────────────────────────────────────────────────────
 
@@ -142,15 +144,31 @@ def _notify_clients():
             _sse_clients.remove(q)
 
 
-# ── Auth decorator ──────────────────────────────────────────────────
+# ── Auth ────────────────────────────────────────────────────────────
+
+_COOKIE_NAME = "lista_auth"
+_COOKIE_PAYLOAD = "lista-auth-v1"
+
+def _make_auth_cookie() -> str:
+    sig = hmac.new(API_KEY.encode(), _COOKIE_PAYLOAD.encode(), hashlib.sha256).hexdigest()
+    return f"{_COOKIE_PAYLOAD}.{sig}"
+
+def _valid_auth_cookie() -> bool:
+    if not API_KEY:
+        return True
+    cookie = request.cookies.get(_COOKIE_NAME, "")
+    expected = _make_auth_cookie()
+    return bool(cookie) and hmac.compare_digest(cookie, expected)
 
 def require_api_key(f):
     @wraps(f)
     def decorated(*args, **kwargs):
+        if not API_KEY:
+            return f(*args, **kwargs)
         key = request.headers.get("X-API-Key", "")
-        if API_KEY and key != API_KEY:
-            return jsonify({"error": "unauthorized"}), 401
-        return f(*args, **kwargs)
+        if key == API_KEY or _valid_auth_cookie():
+            return f(*args, **kwargs)
+        return jsonify({"error": "unauthorized"}), 401
     return decorated
 
 
@@ -345,7 +363,17 @@ def api_reset():
 
 @app.route("/")
 def serve_frontend():
-    return send_from_directory(BASE_DIR, "index.html")
+    resp = make_response(send_from_directory(BASE_DIR, "index.html"))
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    if API_KEY:
+        resp.set_cookie(
+            _COOKIE_NAME, _make_auth_cookie(),
+            max_age=365 * 24 * 3600,
+            httponly=True,
+            samesite="Strict",
+            secure=request.is_secure,
+        )
+    return resp
 
 @app.route("/manifest.json")
 def serve_manifest():
