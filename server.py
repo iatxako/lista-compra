@@ -100,6 +100,15 @@ def init_db():
             )
         """)
         cur.execute("ALTER TABLE catalog ADD COLUMN IF NOT EXISTS category TEXT DEFAULT NULL")
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS history (
+                id SERIAL PRIMARY KEY,
+                saved_at TIMESTAMP DEFAULT NOW(),
+                item_count INTEGER NOT NULL,
+                checked_count INTEGER NOT NULL,
+                items_json JSONB NOT NULL
+            )
+        """)
         conn.commit()
         cur.close()
         conn.close()
@@ -384,6 +393,21 @@ def api_reset():
     try:
         conn = get_db()
         cur = conn.cursor()
+        cur.execute("""
+            SELECT i.name, i.checked, c.category
+            FROM items i LEFT JOIN catalog c ON c.name = i.name
+        """)
+        items_snap = [dict(r) for r in cur.fetchall()]
+        if items_snap:
+            cur.execute(
+                "INSERT INTO history (item_count, checked_count, items_json) VALUES (%s, %s, %s::jsonb)",
+                (len(items_snap), sum(1 for i in items_snap if i['checked']), json.dumps(items_snap))
+            )
+            cur.execute("""
+                DELETE FROM history WHERE id NOT IN (
+                    SELECT id FROM history ORDER BY saved_at DESC LIMIT 10
+                )
+            """)
         cur.execute("DELETE FROM items")
         conn.commit()
         cur.close()
@@ -392,6 +416,46 @@ def api_reset():
         return jsonify({"ok": True})
     except Exception as e:
         log.error("Error resetting: %s", e)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/history")
+@require_api_key
+def api_history():
+    if not DATABASE_URL:
+        return jsonify({"history": []})
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("SELECT id, saved_at, item_count, checked_count FROM history ORDER BY saved_at DESC")
+        rows = [dict(r) for r in cur.fetchall()]
+        cur.close()
+        conn.close()
+        for r in rows:
+            r["saved_at"] = r["saved_at"].isoformat()
+        return jsonify({"history": rows})
+    except Exception as e:
+        log.error("Error loading history: %s", e)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/history/<int:history_id>")
+@require_api_key
+def api_history_detail(history_id):
+    if not DATABASE_URL:
+        return jsonify({"error": "no database"}), 500
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("SELECT items_json FROM history WHERE id = %s", (history_id,))
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        if not row:
+            return jsonify({"error": "not found"}), 404
+        return jsonify({"items": row["items_json"]})
+    except Exception as e:
+        log.error("Error loading history detail: %s", e)
         return jsonify({"error": str(e)}), 500
 
 

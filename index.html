@@ -168,12 +168,21 @@
   }
   .toast.show { opacity: 1; }
 
-  .settings-icon {
-    position: fixed; top: 16px; right: 16px;
-    background: none; border: none; font-size: 1.3rem;
-    cursor: pointer; opacity: 0.5; transition: opacity 0.15s; z-index: 50;
+  .header-actions {
+    position: fixed; top: 8px; right: 8px;
+    display: flex; align-items: center; gap: 2px;
+    z-index: 50;
   }
-  .settings-icon:active { opacity: 1; }
+  .header-btn {
+    background: none; border: none;
+    width: 44px; height: 44px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 10px; font-size: 1.3rem;
+    cursor: pointer; opacity: 0.5;
+    transition: opacity 0.15s, background 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .header-btn:active { opacity: 1; background: rgba(128,128,128,0.12); }
 
   /* Suggestions */
   .suggestions-section { padding: 8px 16px 6px; border-bottom: 1px solid var(--border); }
@@ -230,12 +239,50 @@
   .cat-option.selected { border-color: var(--blue); background: rgba(25,113,194,0.08); }
   .cat-option-emoji { font-size: 1.7rem; }
   .cat-option-label { font-size: 0.68rem; font-weight: 600; text-align: center; color: var(--muted); line-height: 1.2; }
+
+  /* History panel */
+  .history-panel {
+    position: fixed; inset: 0; z-index: 200;
+    display: none; flex-direction: column; justify-content: flex-end;
+  }
+  .history-panel.open { display: flex; }
+  .history-backdrop { flex: 1; background: rgba(0,0,0,0.45); }
+  .history-sheet {
+    background: var(--card);
+    border-radius: 20px 20px 0 0;
+    padding: 20px 16px max(20px, env(safe-area-inset-bottom));
+    max-height: 72vh; overflow-y: auto;
+  }
+  .history-sheet-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .history-sheet-title { font-weight: 700; font-size: 1rem; }
+  .history-close-btn {
+    background: none; border: none;
+    width: 36px; height: 36px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1rem; color: var(--muted); cursor: pointer;
+    border-radius: 8px; -webkit-tap-highlight-color: transparent;
+  }
+  .history-entry {
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .history-entry:last-child { border-bottom: none; }
+  .history-date { font-size: 0.78rem; color: var(--muted); margin-bottom: 4px; }
+  .history-summary { font-size: 0.95rem; font-weight: 600; }
+  .history-pct { font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
+  .history-empty { text-align: center; color: var(--muted); padding: 32px 0; font-size: 0.9rem; }
 </style>
 </head>
 <body>
 
 <div class="toast" id="toast"></div>
-<button class="settings-icon" onclick="resetList()" title="Vaciar lista">🗑️</button>
+<div class="header-actions">
+  <button class="header-btn" onclick="openHistory()" aria-label="Ver historial">🕐</button>
+  <button class="header-btn" onclick="resetList()" aria-label="Vaciar lista">🗑️</button>
+</div>
 
 <h1>Lista de la compra</h1>
 <div class="subtitle" id="subtitle">Cargando...</div>
@@ -262,6 +309,18 @@
     <div class="cat-picker-title">Categoría</div>
     <div class="cat-picker-item" id="cat-picker-item-name"></div>
     <div class="cat-grid" id="cat-grid"></div>
+  </div>
+</div>
+
+<!-- History panel -->
+<div class="history-panel" id="history-panel">
+  <div class="history-backdrop" onclick="closeHistory()"></div>
+  <div class="history-sheet">
+    <div class="history-sheet-header">
+      <span class="history-sheet-title">Historial</span>
+      <button class="history-close-btn" onclick="closeHistory()" aria-label="Cerrar historial">✕</button>
+    </div>
+    <div id="history-list"></div>
   </div>
 </div>
 
@@ -746,6 +805,47 @@ async function resetList() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     _savePending([]); _updateBanner(); toast('Lista vaciada');
   } catch(e) { _items = prev; render(_items); updateSubtitle(); toast('Error al vaciar'); }
+}
+
+// ── History ───────────────────────────────────────────────────────
+async function openHistory() {
+  const panel = document.getElementById('history-panel');
+  const listEl = document.getElementById('history-list');
+  listEl.innerHTML = '<div class="history-empty">Cargando...</div>';
+  panel.classList.add('open');
+  try {
+    const res = await fetch(`${getAPI()}/api/history`, { headers: apiHeaders() });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    renderHistory(data.history || []);
+  } catch(e) {
+    listEl.innerHTML = '<div class="history-empty">Error al cargar historial</div>';
+  }
+}
+
+function closeHistory() {
+  document.getElementById('history-panel').classList.remove('open');
+}
+
+function renderHistory(entries) {
+  const el = document.getElementById('history-list');
+  if (!entries.length) {
+    el.innerHTML = '<div class="history-empty">Aún no hay listas guardadas</div>';
+    return;
+  }
+  el.innerHTML = entries.map(e => {
+    const d = new Date(e.saved_at);
+    const dateStr = d.toLocaleDateString('es-ES', {day: 'numeric', month: 'short', year: 'numeric'})
+                  + ' · ' + d.toLocaleTimeString('es-ES', {hour: '2-digit', minute: '2-digit'});
+    const pct = e.item_count > 0 ? Math.round(e.checked_count / e.item_count * 100) : 0;
+    const arts = e.item_count === 1 ? 'artículo' : 'artículos';
+    const comp = e.checked_count === 1 ? 'comprado' : 'comprados';
+    return `<div class="history-entry">
+      <div class="history-date">${dateStr}</div>
+      <div class="history-summary">${e.item_count} ${arts}</div>
+      <div class="history-pct">${e.checked_count} ${comp} · ${pct}%</div>
+    </div>`;
+  }).join('');
 }
 
 // ── Keyboard shortcut ─────────────────────────────────────────────
