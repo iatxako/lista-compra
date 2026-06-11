@@ -296,6 +296,19 @@
   .history-detail-name { flex: 1; }
   .history-detail-check { color: var(--green); font-size: 0.8rem; flex-shrink: 0; }
   .history-empty { text-align: center; color: var(--muted); padding: 32px 0; font-size: 0.9rem; }
+  .history-store { font-size: 0.8rem; color: var(--blue); font-weight: 600; margin-top: 3px; }
+  .history-total { font-size: 0.8rem; color: var(--green); font-weight: 600; }
+  .history-receipt-btn {
+    background: none; border: 1.5px solid var(--border); border-radius: 8px;
+    font-size: 0.78rem; color: var(--muted); padding: 5px 10px;
+    cursor: pointer; white-space: nowrap; flex-shrink: 0;
+    transition: border-color 0.15s, color 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .history-receipt-btn:active { border-color: var(--blue); color: var(--blue); }
+  .history-receipt-btn.has-receipt { border-color: var(--green); color: var(--green); }
+  .history-receipt-uploading { font-size: 0.78rem; color: var(--muted); flex-shrink: 0; }
+  .history-receipt-input { display: none; }
 </style>
 </head>
 <body>
@@ -862,18 +875,88 @@ function renderHistory(entries) {
     const pct = e.item_count > 0 ? Math.round(e.checked_count / e.item_count * 100) : 0;
     const arts = e.item_count === 1 ? 'artículo' : 'artículos';
     const comp = e.checked_count === 1 ? 'comprado' : 'comprados';
+    const storeHtml = e.store_name ? `<div class="history-store">🏪 ${e.store_name}</div>` : '';
+    const totalHtml = e.total_amount != null ? `<span class="history-total">${parseFloat(e.total_amount).toFixed(2)} €</span>` : '';
+    const hasReceipt = e.store_name != null || e.total_amount != null;
+    const receiptBtnClass = hasReceipt ? 'history-receipt-btn has-receipt' : 'history-receipt-btn';
+    const receiptBtnLabel = hasReceipt ? '🧾 Ticket ✓' : '🧾 Ticket';
     return `<div class="history-entry" onclick="toggleHistoryDetail(this, ${e.id})">
       <div class="history-entry-header">
         <div class="history-entry-meta">
           <div class="history-date">${dateStr}</div>
-          <div class="history-summary">${e.item_count} ${arts}</div>
+          <div class="history-summary">${e.item_count} ${arts} ${totalHtml}</div>
           <div class="history-pct">${e.checked_count} ${comp} · ${pct}%</div>
+          ${storeHtml}
         </div>
-        <span class="history-chevron">▾</span>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
+          <span class="history-chevron">▾</span>
+          <button class="${receiptBtnClass}" onclick="event.stopPropagation();triggerReceiptUpload(${e.id},this)">${receiptBtnLabel}</button>
+          <input type="file" class="history-receipt-input" accept="image/*" capture="environment"
+                 onchange="uploadReceipt(${e.id},this)">
+        </div>
       </div>
       <div class="history-detail"></div>
     </div>`;
   }).join('');
+}
+
+function triggerReceiptUpload(id, btn) {
+  const input = btn.closest('.history-entry').querySelector('.history-receipt-input');
+  input.click();
+}
+
+async function uploadReceipt(id, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const entry = input.closest('.history-entry');
+  const btn = entry.querySelector('.history-receipt-btn');
+  const origLabel = btn.textContent;
+  btn.textContent = '⏳ Procesando...';
+  btn.disabled = true;
+  try {
+    const fd = new FormData();
+    fd.append('receipt', file);
+    // No Content-Type header — browser sets multipart/form-data boundary automatically
+    const uploadHeaders = {};
+    const k = getAPIKey();
+    if (k) uploadHeaders['X-API-Key'] = k;
+    const res = await fetch(`${getAPI()}/api/history/${id}/receipt`, {
+      method: 'POST',
+      headers: uploadHeaders,
+      body: fd,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    // Update entry UI inline without full reload
+    const meta = entry.querySelector('.history-entry-meta');
+    const summaryEl = meta.querySelector('.history-summary');
+    if (data.total_amount != null) {
+      if (!meta.querySelector('.history-total')) {
+        const span = document.createElement('span');
+        span.className = 'history-total';
+        span.textContent = ` ${parseFloat(data.total_amount).toFixed(2)} €`;
+        summaryEl.appendChild(span);
+      }
+    }
+    if (data.store_name) {
+      let storeEl = meta.querySelector('.history-store');
+      if (!storeEl) {
+        storeEl = document.createElement('div');
+        storeEl.className = 'history-store';
+        meta.appendChild(storeEl);
+      }
+      storeEl.textContent = `🏪 ${data.store_name}`;
+    }
+    btn.textContent = '🧾 Ticket ✓';
+    btn.classList.add('has-receipt');
+    btn.disabled = false;
+    toast(`Ticket procesado — ${data.store_name || 'tienda'}, ${data.item_count} artículos`);
+  } catch(e) {
+    btn.textContent = origLabel;
+    btn.disabled = false;
+    toast('Error al procesar el ticket');
+  }
+  input.value = '';
 }
 
 async function toggleHistoryDetail(el, id) {

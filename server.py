@@ -1,20 +1,27 @@
 #!/usr/bin/env python3
 """
-Lista de la compra — v2 API (Railway + Postgres)
+Lista de la compra — v3 API (Railway + Postgres)
 
 Endpoints:
-  GET    /api/list      -> JSON de items
-  POST   /api/check     -> {"name": "...", "checked": bool}
-  POST   /api/add       -> {"name": "..."}
-  POST   /api/remove    -> {"name": "..."}
-  POST   /api/reset     -> vacía la lista
-  GET    /health        -> health check
+  GET    /api/list                  -> JSON de items activos
+  POST   /api/check                 -> {"name": "...", "checked": bool}
+  POST   /api/add                   -> {"name": "...", "category"?: "..."}
+  POST   /api/remove                -> {"name": "..."}
+  POST   /api/category              -> {"name": "...", "category": "..."}
+  POST   /api/reset                 -> vacía la lista + guarda snapshot en history
+  GET    /api/history               -> últimos 10 snapshots
+  GET    /api/history/<id>          -> detalle de snapshot (items_json)
+  POST   /api/history/<id>/receipt  -> sube ticket, extrae datos con Groq vision
+  GET    /api/suggestions           -> sugerencias del catálogo
+  GET    /api/stream                -> SSE para sync en tiempo real
+  GET    /health                    -> health check
 
-Autenticación: X-API-Key header (variable env API_KEY)
+Autenticación: cookie HMAC-SHA256 (httponly) + X-API-Key header fallback
 Persistencia: Postgres (DATABASE_URL)
 """
 
 import os
+import base64
 import json
 import logging
 import queue
@@ -109,6 +116,9 @@ def init_db():
                 items_json JSONB NOT NULL
             )
         """)
+        cur.execute("ALTER TABLE history ADD COLUMN IF NOT EXISTS store_name TEXT DEFAULT NULL")
+        cur.execute("ALTER TABLE history ADD COLUMN IF NOT EXISTS total_amount NUMERIC(10,2) DEFAULT NULL")
+        cur.execute("ALTER TABLE history ADD COLUMN IF NOT EXISTS receipt_json JSONB DEFAULT NULL")
         conn.commit()
         cur.close()
         conn.close()
@@ -427,7 +437,7 @@ def api_history():
     try:
         conn = get_db()
         cur = conn.cursor()
-        cur.execute("SELECT id, saved_at, item_count, checked_count FROM history ORDER BY saved_at DESC")
+        cur.execute("SELECT id, saved_at, item_count, checked_count, store_name, total_amount FROM history ORDER BY saved_at DESC")
         rows = [dict(r) for r in cur.fetchall()]
         cur.close()
         conn.close()
@@ -457,6 +467,125 @@ def api_history_detail(history_id):
     except Exception as e:
         log.error("Error loading history detail: %s", e)
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/history/<int:history_id>/receipt", methods=["POST"])
+@require_api_key
+def api_receipt(history_id):
+    if not DATABASE_URL:
+        return jsonify({"error": "no database"}), 500
+
+    GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+    if not GROQ_API_KEY:
+        return jsonify({"error": "GROQ_API_KEY not configured"}), 503
+
+    if "receipt" not in request.files:
+        return jsonify({"error": "missing file field 'receipt'"}), 400
+
+    img_bytes = request.files["receipt"].read()
+    if len(img_bytes) > 10 * 1024 * 1024:
+        return jsonify({"error": "image too large (max 10MB)"}), 413
+
+    img_b64 = base64.b64encode(img_bytes).decode()
+    mime = request.files["receipt"].mimetype or "image/jpeg"
+    del img_bytes  # discard immediately
+
+    # Load catalog names to help matching
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("SELECT name, category FROM catalog ORDER BY times_purchased DESC LIMIT 200")
+        catalog_names = [f"{r['name']} ({r['category'] or 'sin categoría'})" for r in cur.fetchall()]
+        cur.close()
+        conn.close()
+    except Exception:
+        catalog_names = []
+
+    catalog_hint = ", ".join(catalog_names[:80]) if catalog_names else "sin datos"
+
+    prompt = f"""Eres un asistente que extrae datos estructurados de tickets de compra.
+Analiza la imagen del ticket y devuelve SOLO un JSON válido con esta estructura exacta:
+
+{{
+  "store_name": "nombre del supermercado o tienda",
+  "purchase_date": "YYYY-MM-DD o null si no aparece",
+  "total_amount": 12.34,
+  "items": [
+    {{
+      "name_raw": "nombre tal como aparece en el ticket",
+      "catalog_match": "nombre del producto del catálogo que mejor coincide, o null",
+      "price": 1.23,
+      "quantity": 1,
+      "unit": "ud/kg/l o null"
+    }}
+  ],
+  "discounts": [{{"description": "...", "amount": 0.50}}],
+  "payment_method": "efectivo/tarjeta/null"
+}}
+
+Catálogo disponible para matching (nombre — categoría): {catalog_hint}
+
+Reglas:
+- Si no puedes leer un campo, ponlo a null
+- total_amount debe ser el total final pagado (número, sin símbolo €)
+- Para catalog_match, busca la coincidencia más cercana en el catálogo; si no hay, null
+- Responde ÚNICAMENTE con el JSON, sin texto adicional"""
+
+    try:
+        from groq import Groq
+        client = Groq(api_key=GROQ_API_KEY)
+        response = client.chat.completions.create(
+            model="llama-3.2-90b-vision-preview",
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{img_b64}"}}
+                ]
+            }],
+            max_tokens=2048,
+            temperature=0.1,
+        )
+        del img_b64  # discard after API call
+
+        raw = response.choices[0].message.content.strip()
+        # Strip markdown code fences if present
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        receipt_data = json.loads(raw)
+    except json.JSONDecodeError as e:
+        log.error("Groq returned invalid JSON: %s", e)
+        return jsonify({"error": "El ticket no pudo ser procesado. Intenta con una foto más nítida."}), 422
+    except Exception as e:
+        log.error("Error calling Groq: %s", e)
+        return jsonify({"error": "Error al procesar el ticket"}), 500
+
+    store_name = receipt_data.get("store_name")
+    total_amount = receipt_data.get("total_amount")
+
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("""
+            UPDATE history
+            SET store_name = %s, total_amount = %s, receipt_json = %s::jsonb
+            WHERE id = %s
+        """, (store_name, total_amount, json.dumps(receipt_data), history_id))
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        log.error("Error saving receipt: %s", e)
+        return jsonify({"error": str(e)}), 500
+
+    return jsonify({
+        "ok": True,
+        "store_name": store_name,
+        "total_amount": total_amount,
+        "item_count": len(receipt_data.get("items", [])),
+    })
 
 
 # ── Serve frontend ──────────────────────────────────────────────────
