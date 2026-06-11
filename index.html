@@ -905,7 +905,13 @@ function renderHistoryDetail(container, items) {
     return;
   }
   const catMap = Object.fromEntries(CATEGORIES.map(c => [c.id, c.emoji]));
-  const sorted = [...items].sort((a, b) => a.checked === b.checked ? 0 : a.checked ? 1 : -1);
+  const catOrder = Object.fromEntries(CATEGORIES.map((c, i) => [c.id, i]));
+  const catRank = item => item.category != null ? (catOrder[item.category] ?? CATEGORIES.length) : CATEGORIES.length;
+  const sorted = [...items].sort((a, b) => {
+    const cd = catRank(a) - catRank(b);
+    if (cd !== 0) return cd;
+    return a.checked === b.checked ? 0 : a.checked ? 1 : -1;
+  });
   container.innerHTML = sorted.map(item => {
     const emoji = item.category ? (catMap[item.category] || '') : '';
     const doneClass = item.checked ? 'done' : '';
