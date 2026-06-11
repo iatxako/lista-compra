@@ -268,11 +268,33 @@
   .history-entry {
     padding: 14px 0;
     border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    user-select: none;
   }
   .history-entry:last-child { border-bottom: none; }
+  .history-entry-header { display: flex; align-items: center; justify-content: space-between; }
+  .history-entry-meta { flex: 1; }
   .history-date { font-size: 0.78rem; color: var(--muted); margin-bottom: 4px; }
   .history-summary { font-size: 0.95rem; font-weight: 600; }
   .history-pct { font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
+  .history-chevron {
+    color: var(--muted); font-size: 1rem; flex-shrink: 0;
+    display: inline-block; transition: transform 0.2s; padding: 0 4px;
+  }
+  .history-entry.expanded .history-chevron { transform: rotate(180deg); }
+  .history-detail { display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+  .history-entry.expanded .history-detail { display: block; }
+  .history-detail-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 0; font-size: 0.88rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .history-detail-item:last-child { border-bottom: none; }
+  .history-detail-item.done { color: var(--muted); }
+  .history-detail-item.done .history-detail-name { text-decoration: line-through; }
+  .history-detail-cat { font-size: 0.9rem; flex-shrink: 0; width: 20px; text-align: center; }
+  .history-detail-name { flex: 1; }
+  .history-detail-check { color: var(--green); font-size: 0.8rem; flex-shrink: 0; }
   .history-empty { text-align: center; color: var(--muted); padding: 32px 0; font-size: 0.9rem; }
 </style>
 </head>
@@ -840,10 +862,58 @@ function renderHistory(entries) {
     const pct = e.item_count > 0 ? Math.round(e.checked_count / e.item_count * 100) : 0;
     const arts = e.item_count === 1 ? 'artículo' : 'artículos';
     const comp = e.checked_count === 1 ? 'comprado' : 'comprados';
-    return `<div class="history-entry">
-      <div class="history-date">${dateStr}</div>
-      <div class="history-summary">${e.item_count} ${arts}</div>
-      <div class="history-pct">${e.checked_count} ${comp} · ${pct}%</div>
+    return `<div class="history-entry" onclick="toggleHistoryDetail(this, ${e.id})">
+      <div class="history-entry-header">
+        <div class="history-entry-meta">
+          <div class="history-date">${dateStr}</div>
+          <div class="history-summary">${e.item_count} ${arts}</div>
+          <div class="history-pct">${e.checked_count} ${comp} · ${pct}%</div>
+        </div>
+        <span class="history-chevron">▾</span>
+      </div>
+      <div class="history-detail"></div>
+    </div>`;
+  }).join('');
+}
+
+async function toggleHistoryDetail(el, id) {
+  const detail = el.querySelector('.history-detail');
+  if (el.classList.contains('expanded')) {
+    el.classList.remove('expanded');
+    return;
+  }
+  if (detail.dataset.loaded) {
+    el.classList.add('expanded');
+    return;
+  }
+  detail.innerHTML = '<div style="color:var(--muted);font-size:0.82rem;padding:8px 0">Cargando...</div>';
+  el.classList.add('expanded');
+  try {
+    const res = await fetch(`${getAPI()}/api/history/${id}`, { headers: apiHeaders() });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    renderHistoryDetail(detail, data.items || []);
+    detail.dataset.loaded = '1';
+  } catch(e) {
+    detail.innerHTML = '<div style="color:var(--red);font-size:0.82rem;padding:8px 0">Error al cargar</div>';
+  }
+}
+
+function renderHistoryDetail(container, items) {
+  if (!items.length) {
+    container.innerHTML = '<div style="color:var(--muted);font-size:0.82rem;padding:8px 0">Sin artículos</div>';
+    return;
+  }
+  const catMap = Object.fromEntries(CATEGORIES.map(c => [c.id, c.emoji]));
+  const sorted = [...items].sort((a, b) => a.checked === b.checked ? 0 : a.checked ? 1 : -1);
+  container.innerHTML = sorted.map(item => {
+    const emoji = item.category ? (catMap[item.category] || '') : '';
+    const doneClass = item.checked ? 'done' : '';
+    const check = item.checked ? '<span class="history-detail-check">✓</span>' : '';
+    return `<div class="history-detail-item ${doneClass}">
+      <span class="history-detail-cat">${emoji}</span>
+      <span class="history-detail-name">${item.name}</span>
+      ${check}
     </div>`;
   }).join('');
 }
