@@ -8,8 +8,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Planned
-- Receipt scanning via Groq vision to enrich history entries (store name, total, item prices)
-- Metrics dashboard from history data
+- Metrics dashboard from history + receipt data
+
+---
+
+## [3.1.0] — 2026-06-11
+
+### Added
+- **Receipt scanning (COMPRA-34)**: asociar el ticket físico de la compra a cada entrada del historial
+  - Botón "🧾 Ticket" en cada entrada del panel de historial
+  - Captura de imagen desde cámara (móvil) o selector de archivo
+  - Procesado con Groq `llama-3.2-90b-vision-preview` — extrae supermercado, total, artículos con precios y matching contra catálogo
+  - La imagen **no se almacena** — procesada en memoria y descartada; solo el JSON resultante va a PostgreSQL
+  - Nuevas columnas en `history`: `store_name`, `total_amount`, `receipt_json (JSONB)`
+  - Endpoint: `POST /api/history/<id>/receipt`
+  - El historial muestra 🏪 nombre tienda y 💚 total gastado por entrada cuando hay ticket
+- **Repo hygiene**: CHANGELOG.md, GitHub Actions CI, .gitignore mejorado
+- **Fix crítico**: `railway.json` alineado con Procfile (`gthread --workers 1 --timeout 0`)
+  — `--workers 2 --timeout 30` causaba que SSE no llegara a todos los clientes y drops de conexión
 
 ---
 
