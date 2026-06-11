@@ -3,11 +3,23 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.so
+*.egg-info/
+dist/
+build/
+
+# Envs
 .env
-.env.secret
+.env.*
+!.env.example
+venv/
+env/
+.venv/
 
 # Data (local state, not committed)
 data.json
+
+# Logs
+*.log
 
 # IDE
 .vscode/
@@ -18,3 +30,11 @@ data.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Test/coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Assets originals (source files, not deployed)
+icon-orig.png
