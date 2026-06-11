@@ -595,7 +595,8 @@ function render(items) {
       <span class="cat-header-label">${escapeHtml(info.label)}</span>
       <span class="cat-header-count">${done}/${total}</span>
     </div>`;
-    for (const item of catItems) {
+    const sortedItems = [...catItems].sort((a, b) => a.checked === b.checked ? 0 : a.checked ? 1 : -1);
+    for (const item of sortedItems) {
       const idx  = items.indexOf(item);
       const info = _catInfo(_resolveCategory(item) || 'otros');
       html += `<div class="item${item.checked ? ' checked' : ''}" data-index="${idx}" onclick="toggleCheck(${idx})">
