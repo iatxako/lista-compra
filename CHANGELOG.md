@@ -12,6 +12,34 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.2.0] — 2026-06-11
+
+### Changed (breaking redesign of COMPRA-34 receipt flow)
+- **Receipt scan movido a la lista activa (COMPRA-35)**: el scan ya no ocurre desde el historial sino durante la sesión de compra
+  - Botón 📷 en el header junto a 🕐 y 🗑️ — disponible mientras la lista está activa
+  - Soporte multi-tienda: múltiples scans por sesión (uno por cada tienda visitada)
+  - Fuzzy matching server-side (difflib SequenceMatcher >0.65) — no requiere que Groq conozca el catálogo
+  - Items enriquecidos con precio + tienda visibles en la lista activa y en el detalle del historial
+  - Al vaciar la lista, todos los datos de precio/tienda se archivan en el historial automáticamente
+  - El botón 📷 muestra conteo de tickets escaneados en la sesión (e.g. `📷 2`)
+  - Estado de sesión persiste tras refresh de página (vía `GET /api/receipts`)
+
+### Added
+- Nuevas columnas en `items`: `price`, `store_name`, `ticket_name`, `quantity`, `unit`
+- Nueva tabla `active_receipts`: acumula receipts de la sesión actual, se vacía en cada reset
+- Nueva columna `history.receipts_json`: array de receipts por sesión (una entrada por tienda)
+- `POST /api/receipt`: nuevo endpoint primario — escanea contra lista activa y actualiza items
+- `GET /api/receipts`: devuelve receipts escaneados en la sesión actual
+
+### Removed
+- `POST /api/history/<id>/receipt`: eliminado (beta, sin necesidad de scans retroactivos)
+- Botón "🧾 Ticket" del panel de historial
+
+### Fixed
+- `load_items()` ahora incluye los campos de precio/tienda → SSE propaga precios a todos los clientes en tiempo real
+
+---
+
 ## [3.1.0] — 2026-06-11
 
 ### Added

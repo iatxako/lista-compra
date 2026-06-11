@@ -11,7 +11,8 @@ Endpoints:
   POST   /api/reset                 -> vacía la lista + guarda snapshot en history
   GET    /api/history               -> últimos 10 snapshots
   GET    /api/history/<id>          -> detalle de snapshot (items_json)
-  POST   /api/history/<id>/receipt  -> sube ticket, extrae datos con Groq vision
+  POST   /api/receipt               -> escanea ticket contra lista activa (Groq vision + fuzzy match)
+  GET    /api/receipts              -> receipts escaneados en la sesión actual
   GET    /api/suggestions           -> sugerencias del catálogo
   GET    /api/stream                -> SSE para sync en tiempo real
   GET    /health                    -> health check
@@ -25,11 +26,14 @@ import base64
 import json
 import logging
 import queue
+import re
 import threading
 import time
 import hmac
 import hashlib
+import unicodedata
 from datetime import datetime
+from difflib import SequenceMatcher
 from functools import wraps
 
 import psycopg2
@@ -61,6 +65,27 @@ def _resolve_database_url() -> str:
     return ""
 
 DATABASE_URL = _resolve_database_url()
+
+
+def _normalize(s: str) -> str:
+    s = unicodedata.normalize('NFD', s.lower())
+    s = ''.join(c for c in s if unicodedata.category(c) != 'Mn')
+    s = re.sub(r'\d+\s*(g|gr|kg|ml|cl|l|ud|uds|pcs|u)\b', '', s)
+    return re.sub(r'\s+', ' ', s).strip()
+
+
+def _best_match(ticket_name: str, items: list, threshold: float = 0.65):
+    norm_t = _normalize(ticket_name)
+    best_score, best_name = 0.0, None
+    for item in items:
+        norm_i = _normalize(item['name'])
+        score = SequenceMatcher(None, norm_t, norm_i).ratio()
+        if norm_i and norm_i in norm_t:
+            score = max(score, 0.9)
+        if score > best_score:
+            best_score, best_name = score, item['name']
+    return best_name if best_score >= threshold else None
+
 
 API_KEY = os.environ.get("API_KEY", "")
 PORT = int(os.environ.get("PORT", 8767))
@@ -119,6 +144,23 @@ def init_db():
         cur.execute("ALTER TABLE history ADD COLUMN IF NOT EXISTS store_name TEXT DEFAULT NULL")
         cur.execute("ALTER TABLE history ADD COLUMN IF NOT EXISTS total_amount NUMERIC(10,2) DEFAULT NULL")
         cur.execute("ALTER TABLE history ADD COLUMN IF NOT EXISTS receipt_json JSONB DEFAULT NULL")
+        cur.execute("ALTER TABLE history ADD COLUMN IF NOT EXISTS receipts_json JSONB DEFAULT NULL")
+        # items — receipt enrichment columns
+        cur.execute("ALTER TABLE items ADD COLUMN IF NOT EXISTS price NUMERIC(10,2) DEFAULT NULL")
+        cur.execute("ALTER TABLE items ADD COLUMN IF NOT EXISTS store_name TEXT DEFAULT NULL")
+        cur.execute("ALTER TABLE items ADD COLUMN IF NOT EXISTS ticket_name TEXT DEFAULT NULL")
+        cur.execute("ALTER TABLE items ADD COLUMN IF NOT EXISTS quantity NUMERIC(6,2) DEFAULT NULL")
+        cur.execute("ALTER TABLE items ADD COLUMN IF NOT EXISTS unit TEXT DEFAULT NULL")
+        # session receipts (cleared on each reset)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS active_receipts (
+                id SERIAL PRIMARY KEY,
+                store_name TEXT,
+                total_amount NUMERIC(10,2),
+                scanned_at TIMESTAMP DEFAULT NOW(),
+                extras_json JSONB
+            )
+        """)
         conn.commit()
         cur.close()
         conn.close()
@@ -135,7 +177,10 @@ def load_items():
         conn = get_db()
         cur = conn.cursor()
         cur.execute("""
-            SELECT i.name, i.added, i.checked, c.category
+            SELECT i.name, i.added, i.checked,
+                   i.price::float as price, i.store_name, i.ticket_name,
+                   i.quantity::float as quantity, i.unit,
+                   c.category
             FROM items i
             LEFT JOIN catalog c ON c.name = i.name
             ORDER BY i.created_at ASC
@@ -404,14 +449,38 @@ def api_reset():
         conn = get_db()
         cur = conn.cursor()
         cur.execute("""
-            SELECT i.name, i.checked, c.category
+            SELECT i.name, i.checked,
+                   i.price::float as price, i.store_name, i.ticket_name,
+                   i.quantity::float as quantity, i.unit,
+                   c.category
             FROM items i LEFT JOIN catalog c ON c.name = i.name
         """)
         items_snap = [dict(r) for r in cur.fetchall()]
         if items_snap:
+            cur.execute("SELECT store_name, total_amount, scanned_at, extras_json FROM active_receipts ORDER BY scanned_at ASC")
+            active_receipts = [dict(r) for r in cur.fetchall()]
+
+            receipts_json = [
+                {
+                    "store": r["store_name"],
+                    "total": float(r["total_amount"]) if r["total_amount"] else None,
+                    "scanned_at": r["scanned_at"].isoformat() if r["scanned_at"] else None,
+                    "extras": r["extras_json"] or [],
+                }
+                for r in active_receipts
+            ]
+
+            total_sum = sum(float(r["total_amount"]) for r in active_receipts if r["total_amount"]) or None
+            stores = [r["store_name"] for r in active_receipts if r["store_name"]]
+            store_label = " + ".join(stores) if stores else None
+
             cur.execute(
-                "INSERT INTO history (item_count, checked_count, items_json) VALUES (%s, %s, %s::jsonb)",
-                (len(items_snap), sum(1 for i in items_snap if i['checked']), json.dumps(items_snap))
+                """INSERT INTO history (item_count, checked_count, items_json, store_name, total_amount, receipts_json)
+                   VALUES (%s, %s, %s::jsonb, %s, %s, %s::jsonb)""",
+                (len(items_snap), sum(1 for i in items_snap if i['checked']),
+                 json.dumps(items_snap),
+                 store_label, total_sum,
+                 json.dumps(receipts_json) if receipts_json else None)
             )
             cur.execute("""
                 DELETE FROM history WHERE id NOT IN (
@@ -419,6 +488,7 @@ def api_reset():
                 )
             """)
         cur.execute("DELETE FROM items")
+        cur.execute("DELETE FROM active_receipts")
         conn.commit()
         cur.close()
         conn.close()
@@ -469,9 +539,33 @@ def api_history_detail(history_id):
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/api/history/<int:history_id>/receipt", methods=["POST"])
+@app.route("/api/receipts")
 @require_api_key
-def api_receipt(history_id):
+def api_receipts():
+    if not DATABASE_URL:
+        return jsonify({"receipts": [], "total": None})
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("SELECT id, store_name, total_amount, scanned_at FROM active_receipts ORDER BY scanned_at ASC")
+        rows = [dict(r) for r in cur.fetchall()]
+        cur.close()
+        conn.close()
+        for r in rows:
+            if r["scanned_at"]:
+                r["scanned_at"] = r["scanned_at"].isoformat()
+            if r["total_amount"] is not None:
+                r["total_amount"] = float(r["total_amount"])
+        total = sum(r["total_amount"] for r in rows if r["total_amount"] is not None) or None
+        return jsonify({"receipts": rows, "total": total})
+    except Exception as e:
+        log.error("Error loading receipts: %s", e)
+        return jsonify({"receipts": [], "total": None})
+
+
+@app.route("/api/receipt", methods=["POST"])
+@require_api_key
+def api_scan_receipt():
     if not DATABASE_URL:
         return jsonify({"error": "no database"}), 500
 
@@ -488,47 +582,27 @@ def api_receipt(history_id):
 
     img_b64 = base64.b64encode(img_bytes).decode()
     mime = request.files["receipt"].mimetype or "image/jpeg"
-    del img_bytes  # discard immediately
+    del img_bytes
 
-    # Load catalog names to help matching
-    try:
-        conn = get_db()
-        cur = conn.cursor()
-        cur.execute("SELECT name, category FROM catalog ORDER BY times_purchased DESC LIMIT 200")
-        catalog_names = [f"{r['name']} ({r['category'] or 'sin categoría'})" for r in cur.fetchall()]
-        cur.close()
-        conn.close()
-    except Exception:
-        catalog_names = []
+    prompt = """Eres un asistente que extrae datos estructurados de tickets de compra.
+Analiza la imagen y devuelve SOLO un JSON válido con esta estructura:
 
-    catalog_hint = ", ".join(catalog_names[:80]) if catalog_names else "sin datos"
-
-    prompt = f"""Eres un asistente que extrae datos estructurados de tickets de compra.
-Analiza la imagen del ticket y devuelve SOLO un JSON válido con esta estructura exacta:
-
-{{
+{
   "store_name": "nombre del supermercado o tienda",
-  "purchase_date": "YYYY-MM-DD o null si no aparece",
   "total_amount": 12.34,
   "items": [
-    {{
-      "name_raw": "nombre tal como aparece en el ticket",
-      "catalog_match": "nombre del producto del catálogo que mejor coincide, o null",
+    {
+      "name_raw": "nombre exacto como aparece en el ticket",
       "price": 1.23,
       "quantity": 1,
-      "unit": "ud/kg/l o null"
-    }}
-  ],
-  "discounts": [{{"description": "...", "amount": 0.50}}],
-  "payment_method": "efectivo/tarjeta/null"
-}}
-
-Catálogo disponible para matching (nombre — categoría): {catalog_hint}
+      "unit": "ud/kg/l/g/ml o null"
+    }
+  ]
+}
 
 Reglas:
+- total_amount es el total final pagado (número sin símbolo €)
 - Si no puedes leer un campo, ponlo a null
-- total_amount debe ser el total final pagado (número, sin símbolo €)
-- Para catalog_match, busca la coincidencia más cercana en el catálogo; si no hay, null
 - Responde ÚNICAMENTE con el JSON, sin texto adicional"""
 
     try:
@@ -546,10 +620,9 @@ Reglas:
             max_tokens=2048,
             temperature=0.1,
         )
-        del img_b64  # discard after API call
+        del img_b64
 
         raw = response.choices[0].message.content.strip()
-        # Strip markdown code fences if present
         if raw.startswith("```"):
             raw = raw.split("```")[1]
             if raw.startswith("json"):
@@ -564,27 +637,60 @@ Reglas:
 
     store_name = receipt_data.get("store_name")
     total_amount = receipt_data.get("total_amount")
+    ticket_items = receipt_data.get("items", [])
+
+    matched_count = 0
+    extras = []
 
     try:
         conn = get_db()
         cur = conn.cursor()
+
+        cur.execute("SELECT name FROM items")
+        active_items = [dict(r) for r in cur.fetchall()]
+
+        for t_item in ticket_items:
+            name_raw = t_item.get("name_raw")
+            if not name_raw:
+                continue
+            matched_name = _best_match(name_raw, active_items)
+            if matched_name:
+                cur.execute("""
+                    UPDATE items
+                    SET price = %s, store_name = %s, ticket_name = %s, quantity = %s, unit = %s
+                    WHERE name = %s
+                """, (
+                    t_item.get("price"),
+                    store_name,
+                    name_raw,
+                    t_item.get("quantity"),
+                    t_item.get("unit"),
+                    matched_name,
+                ))
+                matched_count += 1
+            else:
+                extras.append({"name_raw": name_raw, "price": t_item.get("price")})
+
         cur.execute("""
-            UPDATE history
-            SET store_name = %s, total_amount = %s, receipt_json = %s::jsonb
-            WHERE id = %s
-        """, (store_name, total_amount, json.dumps(receipt_data), history_id))
+            INSERT INTO active_receipts (store_name, total_amount, extras_json)
+            VALUES (%s, %s, %s::jsonb)
+        """, (store_name, total_amount, json.dumps(extras)))
+
         conn.commit()
         cur.close()
         conn.close()
     except Exception as e:
-        log.error("Error saving receipt: %s", e)
+        log.error("Error saving receipt data: %s", e)
         return jsonify({"error": str(e)}), 500
+
+    _notify_clients()
 
     return jsonify({
         "ok": True,
         "store_name": store_name,
         "total_amount": total_amount,
-        "item_count": len(receipt_data.get("items", [])),
+        "matched_count": matched_count,
+        "extras_count": len(extras),
     })
 
 
