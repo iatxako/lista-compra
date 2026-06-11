@@ -308,6 +308,7 @@
   .history-receipt-btn:active { border-color: var(--blue); color: var(--blue); }
   .history-receipt-btn.has-receipt { border-color: var(--green); color: var(--green); }
   .history-receipt-uploading { font-size: 0.78rem; color: var(--muted); flex-shrink: 0; }
+  .history-receipt-error { font-size: 0.75rem; color: var(--red); margin-top: 4px; }
   .history-receipt-input { display: none; }
 </style>
 </head>
@@ -950,11 +951,25 @@ async function uploadReceipt(id, input) {
     btn.textContent = '🧾 Ticket ✓';
     btn.classList.add('has-receipt');
     btn.disabled = false;
-    toast(`Ticket procesado — ${data.store_name || 'tienda'}, ${data.item_count} artículos`);
+    const storePart = data.store_name ? `${data.store_name}` : 'Ticket procesado';
+    const totalPart = data.total_amount != null ? ` · ${parseFloat(data.total_amount).toFixed(2)} €` : '';
+    toast(`✓ ${storePart}${totalPart} — ${data.item_count} artículos`);
   } catch(e) {
-    btn.textContent = origLabel;
+    btn.textContent = '⚠️ Error';
+    btn.style.borderColor = 'var(--red)';
+    btn.style.color = 'var(--red)';
     btn.disabled = false;
-    toast('Error al procesar el ticket');
+    // Show error in entry so it persists beyond the toast
+    const meta = entry.querySelector('.history-entry-meta');
+    let errEl = meta.querySelector('.history-receipt-error');
+    if (!errEl) {
+      errEl = document.createElement('div');
+      errEl.className = 'history-receipt-error';
+      meta.appendChild(errEl);
+    }
+    const msg = e.message && e.message.length < 120 ? e.message : 'No se pudo procesar el ticket';
+    errEl.textContent = `⚠️ ${msg}`;
+    setTimeout(() => btn.textContent = origLabel, 3000);
   }
   input.value = '';
 }
