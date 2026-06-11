@@ -74,16 +74,9 @@
     user-select: none;
     min-height: 52px;
   }
-  .item:active {
-    transform: scale(0.98);
-  }
-  .item.checked {
-    opacity: 0.55;
-  }
-  .item.checked .item-name {
-    text-decoration: line-through;
-    color: var(--muted);
-  }
+  .item:active { transform: scale(0.98); }
+  .item.checked { opacity: 0.55; }
+  .item.checked .item-name { text-decoration: line-through; color: var(--muted); }
   .checkbox {
     width: 28px;
     height: 28px;
@@ -96,21 +89,10 @@
     flex-shrink: 0;
     transition: all 0.15s;
   }
-  .item.checked .checkbox {
-    background: var(--green);
-    border-color: var(--green);
-    color: white;
-  }
-  .item-name {
-    flex: 1;
-    font-size: 1.05rem;
-    font-weight: 500;
-  }
-  .item-added {
-    color: var(--muted);
-    font-size: 0.75rem;
-    flex-shrink: 0;
-  }
+  .item.checked .checkbox { background: var(--green); border-color: var(--green); color: white; }
+  .item-name { flex: 1; font-size: 1.05rem; font-weight: 500; }
+  .item-added { color: var(--muted); font-size: 0.75rem; flex-shrink: 0; }
+  .item.pending-op .item-name { opacity: 0.7; }
   .delete-btn {
     background: none;
     border: none;
@@ -122,6 +104,20 @@
     transition: opacity 0.15s;
   }
   .delete-btn:active { opacity: 1; }
+
+  /* Offline banner */
+  .offline-banner {
+    display: none;
+    padding: 9px 16px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    text-align: center;
+    border-radius: 8px;
+    margin-bottom: 12px;
+  }
+  .offline-banner.offline  { background: #868e96; color: #fff; }
+  .offline-banner.syncing  { background: var(--blue); color: #fff; }
+  .offline-banner.pending  { background: #f59f00; color: #fff; }
 
   /* Bottom panel */
   .bottom-panel {
@@ -151,9 +147,7 @@
     outline: none;
     transition: border-color 0.15s;
   }
-  .add-form input:focus {
-    border-color: var(--blue);
-  }
+  .add-form input:focus { border-color: var(--blue); }
   .input-error {
     font-size: 0.78rem;
     color: var(--red);
@@ -172,16 +166,10 @@
     cursor: pointer;
     transition: background 0.15s;
   }
-  .add-form button:active {
-    background: #1558b0;
-  }
+  .add-form button:active { background: #1558b0; }
 
   /* Empty state */
-  .empty {
-    text-align: center;
-    padding: 60px 20px;
-    color: var(--muted);
-  }
+  .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
   .empty .emoji { font-size: 3rem; margin-bottom: 12px; }
 
   /* Toast */
@@ -272,6 +260,7 @@
 
 <h1>Lista de la compra</h1>
 <div class="subtitle" id="subtitle">Cargando...</div>
+<div class="offline-banner" id="offline-banner"></div>
 
 <div id="list"></div>
 
@@ -290,19 +279,18 @@
 <script>
 // ── State ────────────────────────────────────────────────────────
 let _items = [];
+let _isOnline = navigator.onLine;
+let _syncing = false;
 
 // ── Config ────────────────────────────────────────────────────────
-// Leer API key desde URL (?api_key=...) y guardarla en localStorage
 const urlParams = new URLSearchParams(window.location.search);
 const urlApiKey = urlParams.get('api_key');
 if (urlApiKey) {
   localStorage.setItem('lista_api_key', urlApiKey);
   window.history.replaceState({}, '', window.location.pathname);
 }
-
 function getAPI() { return localStorage.getItem('lista_api_url') || ''; }
 function getAPIKey() { return localStorage.getItem('lista_api_key') || ''; }
-
 function apiHeaders() {
   const h = {'Content-Type': 'application/json'};
   const k = getAPIKey();
@@ -310,7 +298,93 @@ function apiHeaders() {
   return h;
 }
 
-// ── Suggestions state ────────────────────────────────────────────
+// ── Pending queue ────────────────────────────────────────────────
+function _getPending() { return JSON.parse(localStorage.getItem('lista_pending') || '[]'); }
+function _savePending(ops) { localStorage.setItem('lista_pending', JSON.stringify(ops)); }
+function _enqueue(op) { const ops = _getPending(); ops.push(op); _savePending(ops); }
+function _dequeue() { const ops = _getPending(); ops.shift(); _savePending(ops); }
+
+// ── Cache (last known server state) ──────────────────────────────
+function _saveCache(items) { localStorage.setItem('lista_cache', JSON.stringify(items)); }
+function _loadCache() { return JSON.parse(localStorage.getItem('lista_cache') || '[]'); }
+
+// ── Merge server state + pending queue ───────────────────────────
+function _merge(serverItems) {
+  let items = serverItems.map(i => ({...i}));
+  for (const op of _getPending()) {
+    if (op.type === 'add') {
+      if (!items.find(i => i.name === op.name))
+        items.push({name: op.name, added: op.added || '', checked: false});
+    } else if (op.type === 'check') {
+      const item = items.find(i => i.name === op.name);
+      if (item) item.checked = op.checked;
+    } else if (op.type === 'remove') {
+      items = items.filter(i => i.name !== op.name);
+    }
+  }
+  return items;
+}
+
+// ── Offline banner ────────────────────────────────────────────────
+function _updateBanner() {
+  const el = document.getElementById('offline-banner');
+  if (!el) return;
+  const n = _getPending().length;
+  const pendingTxt = n => `${n} cambio${n !== 1 ? 's' : ''} pendiente${n !== 1 ? 's' : ''}`;
+  if (!_isOnline && n > 0) {
+    el.className = 'offline-banner offline';
+    el.textContent = `Sin conexión · ${pendingTxt(n)}`;
+    el.style.display = 'block';
+  } else if (!_isOnline) {
+    el.className = 'offline-banner offline';
+    el.textContent = 'Sin conexión';
+    el.style.display = 'block';
+  } else if (_syncing) {
+    el.className = 'offline-banner syncing';
+    el.textContent = `Sincronizando ${pendingTxt(n)}…`;
+    el.style.display = 'block';
+  } else if (n > 0) {
+    el.className = 'offline-banner pending';
+    el.textContent = `${pendingTxt(n)} · reintentando…`;
+    el.style.display = 'block';
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+// ── Sync pending queue ────────────────────────────────────────────
+async function _syncPending() {
+  if (_syncing || !_isOnline) return;
+  if (!_getPending().length) return;
+  _syncing = true;
+  _updateBanner();
+  while (_getPending().length > 0) {
+    const op = _getPending()[0];
+    try {
+      let url, body;
+      if      (op.type === 'add')    { url = `${getAPI()}/api/add`;    body = {name: op.name}; }
+      else if (op.type === 'check')  { url = `${getAPI()}/api/check`;  body = {name: op.name, checked: op.checked}; }
+      else if (op.type === 'remove') { url = `${getAPI()}/api/remove`; body = {name: op.name}; }
+      else { _dequeue(); continue; }
+      const res = await fetch(url, {method: 'POST', headers: apiHeaders(), body: JSON.stringify(body)});
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      _dequeue();
+    } catch(e) {
+      _syncing = false;
+      _updateBanner();
+      setTimeout(() => { if (_getPending().length > 0 && _isOnline && !_syncing) _syncPending(); }, 5000);
+      return;
+    }
+  }
+  _syncing = false;
+  _updateBanner();
+}
+
+// ── Online / offline events ───────────────────────────────────────
+window.addEventListener('online',  () => { _isOnline = true;  _updateBanner(); if (_getPending().length && !_syncing) _syncPending(); });
+window.addEventListener('offline', () => { _isOnline = false; _updateBanner(); });
+
+// ── Suggestions ───────────────────────────────────────────────────
 let _suggestions = [];
 let _dismissed = new Set();
 let _suggestionsTimer = null;
@@ -319,7 +393,6 @@ function scheduleSuggestionsRefresh() {
   clearTimeout(_suggestionsTimer);
   _suggestionsTimer = setTimeout(loadSuggestions, 1500);
 }
-
 async function loadSuggestions() {
   try {
     const res = await fetch(`${getAPI()}/api/suggestions`);
@@ -328,7 +401,6 @@ async function loadSuggestions() {
     renderSuggestions();
   } catch(e) {}
 }
-
 function renderSuggestions() {
   const section = document.getElementById('suggestions-section');
   const chips = document.getElementById('suggestions-chips');
@@ -340,34 +412,9 @@ function renderSuggestions() {
     return `<div class="chip" onclick="addFromSuggestion('${n}')"><span class="chip-name">${n}</span></div>`;
   }).join('') + `<button class="chip-clear" onclick="clearSuggestions()">Borrar</button>`;
 }
+function clearSuggestions() { _suggestions.forEach(s => _dismissed.add(s.name)); renderSuggestions(); }
 
-function clearSuggestions() {
-  _suggestions.forEach(s => _dismissed.add(s.name));
-  renderSuggestions();
-}
-
-async function addFromSuggestion(name) {
-  if (_items.find(i => i.name === name)) { _dismissed.add(name); renderSuggestions(); return; }
-  _dismissed.add(name);
-  renderSuggestions();
-  const today = new Date().toLocaleDateString('es-ES', {day: 'numeric', month: 'short'});
-  _items.push({name, added: today, checked: false});
-  render(_items);
-  updateSubtitle();
-  try {
-    await fetch(`${getAPI()}/api/add`, {
-      method: 'POST', headers: apiHeaders(),
-      body: JSON.stringify({name})
-    });
-  } catch(e) {
-    _items = _items.filter(i => i.name !== name);
-    render(_items);
-    updateSubtitle();
-    toast('Error al añadir');
-  }
-}
-
-// ── Input error ───────────────────────────────────────────────────
+// ── Input error / toast / subtitle ───────────────────────────────
 let _errorTimer = null;
 function showInputError() {
   const el = document.getElementById('input-error');
@@ -375,16 +422,12 @@ function showInputError() {
   clearTimeout(_errorTimer);
   _errorTimer = setTimeout(() => el.classList.remove('show'), 2000);
 }
-
-// ── Toast ────────────────────────────────────────────────────────
 function toast(msg) {
   const el = document.getElementById('toast');
   el.textContent = msg;
   el.classList.add('show');
   setTimeout(() => el.classList.remove('show'), 2000);
 }
-
-// ── Subtitle ─────────────────────────────────────────────────────
 function updateSubtitle() {
   const total = _items.length;
   const done = _items.filter(i => i.checked).length;
@@ -392,22 +435,7 @@ function updateSubtitle() {
     total > 0 ? `${done} de ${total} comprados` : 'Lista vacía';
 }
 
-// ── Load ─────────────────────────────────────────────────────────
-async function loadList() {
-  try {
-    const res = await fetch(`${getAPI()}/api/list`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    _items = data.items || [];
-    render(_items);
-    updateSubtitle();
-  } catch (e) {
-    document.getElementById('subtitle').textContent = 'Error de conexión';
-    toast('Error al cargar');
-  }
-}
-
-// ── Render ───────────────────────────────────────────────────────
+// ── Render ────────────────────────────────────────────────────────
 function render(items) {
   const container = document.getElementById('list');
   if (!items.length) {
@@ -423,36 +451,38 @@ function render(items) {
     </div>
   `).join('');
 }
-
 function escapeHtml(text) {
   const d = document.createElement('div');
   d.textContent = text;
   return d.innerHTML;
 }
 
-// ── Toggle check ─────────────────────────────────────────────────
+// ── Toggle check ──────────────────────────────────────────────────
 async function toggleCheck(idx) {
   if (!_items[idx]) return;
   const item = _items[idx];
-  const prev = item.checked;
-  item.checked = !prev;
+  const newChecked = !item.checked;
+  item.checked = newChecked;
   render(_items);
   updateSubtitle();
+  if (!_isOnline) {
+    _enqueue({type: 'check', name: item.name, checked: newChecked});
+    _updateBanner();
+    return;
+  }
   try {
-    await fetch(`${getAPI()}/api/check`, {
-      method: 'POST',
-      headers: apiHeaders(),
-      body: JSON.stringify({name: item.name, checked: item.checked})
+    const res = await fetch(`${getAPI()}/api/check`, {
+      method: 'POST', headers: apiHeaders(),
+      body: JSON.stringify({name: item.name, checked: newChecked})
     });
-  } catch (e) {
-    item.checked = prev;
-    render(_items);
-    updateSubtitle();
-    toast('Error al marcar');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  } catch(e) {
+    _enqueue({type: 'check', name: item.name, checked: newChecked});
+    _updateBanner();
   }
 }
 
-// ── Add item ─────────────────────────────────────────────────────
+// ── Add item ──────────────────────────────────────────────────────
 async function addItem() {
   const input = document.getElementById('newItem');
   const name = input.value.trim();
@@ -464,42 +494,74 @@ async function addItem() {
   _items.push({name, added: today, checked: false});
   render(_items);
   updateSubtitle();
+  if (!_isOnline) {
+    _enqueue({type: 'add', name, added: today});
+    _updateBanner();
+    return;
+  }
   try {
-    await fetch(`${getAPI()}/api/add`, {
-      method: 'POST',
-      headers: apiHeaders(),
+    const res = await fetch(`${getAPI()}/api/add`, {
+      method: 'POST', headers: apiHeaders(),
       body: JSON.stringify({name})
     });
-  } catch (e) {
-    _items = _items.filter(i => i.name !== name);
-    render(_items);
-    updateSubtitle();
-    toast('Error al añadir');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  } catch(e) {
+    _enqueue({type: 'add', name, added: today});
+    _updateBanner();
   }
 }
 
-// ── Remove item ──────────────────────────────────────────────────
+// ── Add from suggestion ───────────────────────────────────────────
+async function addFromSuggestion(name) {
+  if (_items.find(i => i.name === name)) { _dismissed.add(name); renderSuggestions(); return; }
+  _dismissed.add(name);
+  renderSuggestions();
+  const today = new Date().toLocaleDateString('es-ES', {day: 'numeric', month: 'short'});
+  _items.push({name, added: today, checked: false});
+  render(_items);
+  updateSubtitle();
+  if (!_isOnline) {
+    _enqueue({type: 'add', name, added: today});
+    _updateBanner();
+    return;
+  }
+  try {
+    const res = await fetch(`${getAPI()}/api/add`, {
+      method: 'POST', headers: apiHeaders(),
+      body: JSON.stringify({name})
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  } catch(e) {
+    _enqueue({type: 'add', name, added: today});
+    _updateBanner();
+  }
+}
+
+// ── Remove item ───────────────────────────────────────────────────
 async function removeItem(idx) {
   if (!_items[idx]) return;
   const item = _items[idx];
   _items.splice(idx, 1);
   render(_items);
   updateSubtitle();
+  if (!_isOnline) {
+    _enqueue({type: 'remove', name: item.name});
+    _updateBanner();
+    return;
+  }
   try {
-    await fetch(`${getAPI()}/api/remove`, {
-      method: 'POST',
-      headers: apiHeaders(),
+    const res = await fetch(`${getAPI()}/api/remove`, {
+      method: 'POST', headers: apiHeaders(),
       body: JSON.stringify({name: item.name})
     });
-  } catch (e) {
-    _items.splice(idx, 0, item);
-    render(_items);
-    updateSubtitle();
-    toast('Error al eliminar');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  } catch(e) {
+    _enqueue({type: 'remove', name: item.name});
+    _updateBanner();
   }
 }
 
-// ── Reset list ───────────────────────────────────────────────────
+// ── Reset list ────────────────────────────────────────────────────
 async function resetList() {
   if (!confirm('¿Vaciar toda la lista?')) return;
   const prev = [..._items];
@@ -507,41 +569,54 @@ async function resetList() {
   render(_items);
   updateSubtitle();
   try {
-    await fetch(`${getAPI()}/api/reset`, {
-      method: 'POST',
-      headers: apiHeaders()
-    });
+    const res = await fetch(`${getAPI()}/api/reset`, {method: 'POST', headers: apiHeaders()});
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    _savePending([]);
+    _updateBanner();
     toast('Lista vaciada');
-  } catch (e) {
+  } catch(e) {
     _items = prev;
     render(_items);
     updateSubtitle();
-    toast('Error');
+    toast('Error al vaciar');
   }
 }
 
-// ── Keyboard shortcut ────────────────────────────────────────────
-document.getElementById('newItem').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') addItem();
-});
+// ── Keyboard shortcut ─────────────────────────────────────────────
+document.getElementById('newItem').addEventListener('keydown', e => { if (e.key === 'Enter') addItem(); });
 
-// ── SSE ──────────────────────────────────────────────────────────
+// ── SSE ───────────────────────────────────────────────────────────
 function connectSSE() {
-  const url = `${getAPI()}/api/stream`;
-  const es = new EventSource(url);
+  const es = new EventSource(`${getAPI()}/api/stream`);
   es.onmessage = (e) => {
-    const data = JSON.parse(e.data);
-    _items = data.items || [];
+    const serverItems = JSON.parse(e.data).items || [];
+    _saveCache(serverItems);
+    _items = _merge(serverItems);
     render(_items);
     updateSubtitle();
     scheduleSuggestionsRefresh();
+    if (_getPending().length > 0 && !_syncing) _syncPending();
   };
   es.onerror = () => {
-    document.getElementById('subtitle').textContent = 'Reconectando...';
+    // If we have a cache, show it merged with pending so user sees their data
+    const cached = _loadCache();
+    if (cached.length > 0 && _items.length === 0) {
+      _items = _merge(cached);
+      render(_items);
+      updateSubtitle();
+    }
   };
 }
 
-// ── Init ─────────────────────────────────────────────────────────
+// ── Init ──────────────────────────────────────────────────────────
+// Show pending items from previous session before SSE connects
+const _cachedOnLoad = _loadCache();
+if (_cachedOnLoad.length > 0) {
+  _items = _merge(_cachedOnLoad);
+  render(_items);
+  updateSubtitle();
+}
+_updateBanner();
 connectSSE();
 loadSuggestions();
 </script>
