@@ -87,6 +87,39 @@ def _best_match(ticket_name: str, items: list, threshold: float = 0.65):
     return best_name if best_score >= threshold else None
 
 
+_CATEGORY_KEYWORDS: dict[str, list[str]] = {
+    'carne_pescado': ['pollo', 'ternera', 'cerdo', 'carne', 'jamon', 'salchicha', 'chorizo',
+                      'pavo', 'pechuga', 'salmon', 'merluza', 'bacalao', 'atun', 'sardina',
+                      'gamba', 'mejillon', 'sepia', 'calamar', 'dorada', 'lubina', 'costilla',
+                      'morcilla', 'fuet', 'pescado', 'marisco', 'contramuslo', 'muslo',
+                      'filete', 'cordero', 'conejo', 'langostino', 'trucha', 'rape'],
+    'fruta_verdura': ['manzana', 'pera', 'naranja', 'limon', 'platano', 'uva', 'fresa',
+                      'mango', 'aguacate', 'lechuga', 'tomate', 'pepino', 'cebolla', 'ajo',
+                      'zanahoria', 'patata', 'verdura', 'pimiento', 'brocoli', 'espinaca',
+                      'coliflor', 'calabacin', 'champinon', 'sandia', 'melon', 'fruta',
+                      'alcachofa', 'esparrago', 'apio', 'remolacha'],
+    'lacteos':       ['leche', 'yogur', 'queso', 'mantequilla', 'nata', 'kefir', 'cuajada',
+                      'natillas', 'flan', 'petit'],
+    'pan_bolleria':  ['pan', 'baguette', 'croissant', 'galleta', 'magdalena', 'bizcocho',
+                      'bolleria', 'rosquilla', 'napolitana'],
+    'bebidas':       ['cerveza', 'vino', 'refresco', 'zumo', 'sidra', 'cava'],
+    'limpieza':      ['lejia', 'lavavajillas', 'detergente', 'suavizante', 'estropajo',
+                      'fregasuelos', 'quitagrasas', 'limpiacristales', 'bayeta', 'fregona',
+                      'ariel', 'skip', 'fairy', 'mistol', 'ajax', 'domestos'],
+    'higiene':       ['champu', 'dentifrico', 'desodorante', 'maquinilla', 'compresas', 'tampon'],
+    'congelados':    ['helado', 'croqueta', 'nugget', 'congelado'],
+}
+
+
+def _category_for_name(name: str) -> str | None:
+    words = set(_normalize(name).split())
+    for category, keywords in _CATEGORY_KEYWORDS.items():
+        for kw in keywords:
+            if _normalize(kw) in words:
+                return category
+    return None
+
+
 API_KEY = os.environ.get("API_KEY", "")
 PORT = int(os.environ.get("PORT", 8767))
 DEBUG = os.environ.get("DEBUG", "").lower() in ("1", "true", "yes")
@@ -676,11 +709,25 @@ Reglas:
                     matched_name,
                 ))
                 matched_count += 1
+                # Enrich item name if the ticket version is more specific
+                name_es_clean = (t_item.get("name_es") or "").strip().capitalize()
+                if name_es_clean and name_es_clean != matched_name:
+                    norm_matched = _normalize(matched_name)
+                    norm_new = _normalize(name_es_clean)
+                    if norm_matched and norm_matched in norm_new and len(name_es_clean) > len(matched_name):
+                        cur.execute("SELECT 1 FROM items WHERE name = %s", (name_es_clean,))
+                        if not cur.fetchone():
+                            cur.execute("UPDATE items SET name = %s WHERE name = %s", (name_es_clean, matched_name))
+                            cur.execute("UPDATE catalog SET name = %s WHERE name = %s", (name_es_clean, matched_name))
+                            for ai in active_items:
+                                if ai['name'] == matched_name:
+                                    ai['name'] = name_es_clean
             else:
                 # Extra: not in the list — add it as a checked (bought) item
                 item_name = (t_item.get("name_es") or name_raw).strip().capitalize()
                 extras_log.append({"name_raw": name_raw, "name_es": item_name, "price": t_item.get("price")})
                 if item_name:
+                    item_category = _category_for_name(item_name)
                     cur.execute("""
                         INSERT INTO items (name, added, checked, price, store_name, ticket_name, quantity, unit)
                         VALUES (%s, %s, TRUE, %s, %s, %s, %s, %s)
@@ -689,12 +736,13 @@ Reglas:
                           t_item.get("quantity"), t_item.get("unit")))
                     if cur.rowcount > 0:
                         cur.execute("""
-                            INSERT INTO catalog (name, times_added, times_purchased, last_added_at, last_purchased_at)
-                            VALUES (%s, 1, 1, NOW(), NOW())
+                            INSERT INTO catalog (name, times_added, times_purchased, last_added_at, last_purchased_at, category)
+                            VALUES (%s, 1, 1, NOW(), NOW(), %s)
                             ON CONFLICT (name) DO UPDATE
                                 SET times_purchased = catalog.times_purchased + 1,
-                                    last_purchased_at = NOW()
-                        """, (item_name,))
+                                    last_purchased_at = NOW(),
+                                    category = COALESCE(EXCLUDED.category, catalog.category)
+                        """, (item_name, item_category))
                         added_count += 1
 
         cur.execute("""

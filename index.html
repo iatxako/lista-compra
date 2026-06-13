@@ -313,7 +313,7 @@
   <button class="header-btn" onclick="openHistory()" aria-label="Ver historial">🕐</button>
   <button class="header-btn" onclick="resetList()" aria-label="Vaciar lista">🗑️</button>
 </div>
-<input type="file" id="receipt-file-input" accept="image/*" capture="environment" onchange="uploadActiveReceipt(this)" style="display:none">
+<input type="file" id="receipt-file-input" accept="image/*" onchange="uploadActiveReceipt(this)" style="display:none">
 
 <h1>Lista de la compra</h1>
 <div class="subtitle" id="subtitle">Cargando...</div>
@@ -696,7 +696,7 @@ function render(items) {
         <span class="item-name">${escapeHtml(item.name)}</span>
         ${priceHtml}
         <span class="item-added">${item.added || ''}</span>
-        <button class="cat-btn" onclick="event.stopPropagation();openCatPicker(${idx})" title="Categoría">${info.emoji}</button>
+        <button class="cat-btn" onclick="event.stopPropagation();openCatPicker(${idx})" title="Categoría">⋯</button>
         <button class="delete-btn" onclick="event.stopPropagation();removeItem(${idx})">✕</button>
       </div>`;
     }
@@ -982,15 +982,12 @@ function renderHistoryDetail(container, items) {
     const check = item.checked ? '<span class="history-detail-check">✓</span>' : '';
     const priceHtml = item.price != null ? `<span class="history-item-price">${parseFloat(item.price).toFixed(2)} €</span>` : '';
     const storeHtml = item.store_name ? `<span class="history-item-store">${item.store_name}</span>` : '';
-    const ticketDetail = item.ticket_name && item.ticket_name.toLowerCase() !== item.name.toLowerCase()
-      ? `<div class="history-item-ticket">${item.ticket_name}</div>` : '';
     return `<div class="history-detail-item ${doneClass}">
       <div style="display:flex;align-items:center;width:100%">
         <span class="history-detail-cat">${emoji}</span>
         <span class="history-detail-name">${item.name}</span>
         ${priceHtml}${storeHtml}${check}
       </div>
-      ${ticketDetail}
     </div>`;
   }).join('');
 }

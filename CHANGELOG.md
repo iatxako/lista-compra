@@ -9,6 +9,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Planned
 - Metrics dashboard from history + receipt data
+- Store tags: normalize store names to display chips (COMPRA-38)
+
+---
+
+## [3.4.0] — 2026-06-13
+
+### Changed (COMPRA-37 — refinamientos scan ticket)
+- **Categoría automática para extras**: los productos del ticket no presentes en la lista se categorizan automáticamente via `_category_for_name()` (coincidencia por palabras clave) antes de insertarse. Ej: "Contramuslo de pollo" → `carne_pescado`, "Bacalao desalado" → `carne_pescado`. Se propaga también al catálogo para mantener la categoría en futuros usos.
+- **Nombre más rico en detalle**: si el ticket aporta un nombre más específico que el de la lista (ej: ticket "Contramuslo de pollo" vs lista "Pollo"), y el nombre de la lista aparece como subcadena del nombre del ticket, el ítem se renombra automáticamente al nombre más descriptivo. Se actualiza tanto `items` como `catalog`.
+- **Selector de galería habilitado**: eliminado `capture="environment"` del input de imagen — ahora el diálogo permite tanto hacer una foto nueva como elegir una imagen existente de la galería.
+- **Eliminado emoji redundante por ítem**: el botón de categoría en la lista activa muestra `⋯` en lugar del emoji de categoría. El emoji ya se muestra en la cabecera del grupo de categoría; duplicarlo por ítem era ruido visual.
+- **Eliminada línea secundaria de ticket en historial**: la línea en cursiva que mostraba el texto original del ticket (ej: "contracoix de pollastre") bajo el nombre del ítem ha sido eliminada. El nombre del ítem ya refleja la versión más rica; guardar el original en `ticket_name` sigue siendo posible para métricas futuras (COMPRA-33) pero no se muestra en la UI.
 
 ---
 
