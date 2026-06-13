@@ -300,6 +300,7 @@
   .history-total { font-size: 0.8rem; color: var(--green); font-weight: 600; }
   .history-item-price { font-size: 0.78rem; color: var(--green); font-weight: 600; margin-left: auto; margin-right: 4px; white-space: nowrap; }
   .history-item-store { font-size: 0.72rem; color: var(--muted); margin-right: 4px; white-space: nowrap; }
+  .history-item-ticket { font-size: 0.72rem; color: var(--muted); font-style: italic; padding-left: 22px; margin-top: 1px; }
   .item-price { font-size: 0.78rem; color: var(--green); font-weight: 600; white-space: nowrap; }
   .header-btn.has-receipts { background: rgba(43,138,62,0.12); color: var(--green); }
 </style>
@@ -865,8 +866,8 @@ async function uploadActiveReceipt(input) {
     _updateReceiptBtn();
     const storePart = data.store_name || 'Ticket procesado';
     const totalPart = data.total_amount != null ? ` · ${parseFloat(data.total_amount).toFixed(2)} €` : '';
-    const extraPart = data.extras_count > 0 ? ` (+${data.extras_count} extras)` : '';
-    toast(`📷 ${storePart}${totalPart} — ${data.matched_count} art. actualizados${extraPart}`);
+    const addedPart = data.added_count > 0 ? ` · ${data.added_count} añadidos` : '';
+    toast(`📷 ${storePart}${totalPart} — ${data.matched_count} act.${addedPart}`);
   } catch(e) {
     btn.textContent = origLabel;
     const msg = e.message && e.message.length < 120 ? e.message : 'No se pudo procesar el ticket';
@@ -981,10 +982,15 @@ function renderHistoryDetail(container, items) {
     const check = item.checked ? '<span class="history-detail-check">✓</span>' : '';
     const priceHtml = item.price != null ? `<span class="history-item-price">${parseFloat(item.price).toFixed(2)} €</span>` : '';
     const storeHtml = item.store_name ? `<span class="history-item-store">${item.store_name}</span>` : '';
+    const ticketDetail = item.ticket_name && item.ticket_name.toLowerCase() !== item.name.toLowerCase()
+      ? `<div class="history-item-ticket">${item.ticket_name}</div>` : '';
     return `<div class="history-detail-item ${doneClass}">
-      <span class="history-detail-cat">${emoji}</span>
-      <span class="history-detail-name">${item.name}</span>
-      ${priceHtml}${storeHtml}${check}
+      <div style="display:flex;align-items:center;width:100%">
+        <span class="history-detail-cat">${emoji}</span>
+        <span class="history-detail-name">${item.name}</span>
+        ${priceHtml}${storeHtml}${check}
+      </div>
+      ${ticketDetail}
     </div>`;
   }).join('');
 }

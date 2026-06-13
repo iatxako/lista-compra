@@ -592,7 +592,8 @@ Analiza la imagen y devuelve SOLO un JSON válido con esta estructura:
   "total_amount": 12.34,
   "items": [
     {
-      "name_raw": "nombre exacto como aparece en el ticket",
+      "name_raw": "texto exacto como aparece en el ticket, sin modificar",
+      "name_es": "nombre del producto en castellano",
       "price": 1.23,
       "quantity": 1,
       "unit": "ud/kg/l/g/ml o null"
@@ -602,6 +603,8 @@ Analiza la imagen y devuelve SOLO un JSON válido con esta estructura:
 
 Reglas:
 - total_amount es el total final pagado (número sin símbolo €)
+- name_raw: copia literal del texto del ticket, sin traducir ni modificar
+- name_es: nombre del producto en castellano. Si el ticket está en catalán, valenciano u otro idioma, DEBES traducirlo al castellano. Si ya está en castellano, repite el mismo valor que name_raw
 - Si no puedes leer un campo, ponlo a null
 - Responde ÚNICAMENTE con el JSON, sin texto adicional"""
 
@@ -640,7 +643,8 @@ Reglas:
     ticket_items = receipt_data.get("items", [])
 
     matched_count = 0
-    extras = []
+    added_count = 0
+    extras_log = []
 
     try:
         conn = get_db()
@@ -649,11 +653,15 @@ Reglas:
         cur.execute("SELECT name FROM items")
         active_items = [dict(r) for r in cur.fetchall()]
 
+        today = datetime.now().strftime("%d %b")
+
         for t_item in ticket_items:
             name_raw = t_item.get("name_raw")
             if not name_raw:
                 continue
-            matched_name = _best_match(name_raw, active_items)
+            # Prefer Spanish translation for matching; fall back to raw name
+            match_key = t_item.get("name_es") or name_raw
+            matched_name = _best_match(match_key, active_items)
             if matched_name:
                 cur.execute("""
                     UPDATE items
@@ -669,12 +677,30 @@ Reglas:
                 ))
                 matched_count += 1
             else:
-                extras.append({"name_raw": name_raw, "price": t_item.get("price")})
+                # Extra: not in the list — add it as a checked (bought) item
+                item_name = (t_item.get("name_es") or name_raw).strip().capitalize()
+                extras_log.append({"name_raw": name_raw, "name_es": item_name, "price": t_item.get("price")})
+                if item_name:
+                    cur.execute("""
+                        INSERT INTO items (name, added, checked, price, store_name, ticket_name, quantity, unit)
+                        VALUES (%s, %s, TRUE, %s, %s, %s, %s, %s)
+                        ON CONFLICT (name) DO NOTHING
+                    """, (item_name, today, t_item.get("price"), store_name, name_raw,
+                          t_item.get("quantity"), t_item.get("unit")))
+                    if cur.rowcount > 0:
+                        cur.execute("""
+                            INSERT INTO catalog (name, times_added, times_purchased, last_added_at, last_purchased_at)
+                            VALUES (%s, 1, 1, NOW(), NOW())
+                            ON CONFLICT (name) DO UPDATE
+                                SET times_purchased = catalog.times_purchased + 1,
+                                    last_purchased_at = NOW()
+                        """, (item_name,))
+                        added_count += 1
 
         cur.execute("""
             INSERT INTO active_receipts (store_name, total_amount, extras_json)
             VALUES (%s, %s, %s::jsonb)
-        """, (store_name, total_amount, json.dumps(extras)))
+        """, (store_name, total_amount, json.dumps(extras_log)))
 
         conn.commit()
         cur.close()
@@ -690,7 +716,7 @@ Reglas:
         "store_name": store_name,
         "total_amount": total_amount,
         "matched_count": matched_count,
-        "extras_count": len(extras),
+        "added_count": added_count,
     })
 
 

@@ -12,6 +12,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.3.0] — 2026-06-13
+
+### Added (COMPRA-36)
+- **Soporte catalán y multilingüe**: campo `name_es` en el output de Groq — el modelo traduce el texto del ticket al castellano cuando está en catalán, valenciano u otro idioma. El fuzzy match usa `name_es` para comparar contra la lista (en castellano). `ticket_name` sigue guardando el texto original fiel al ticket.
+- **Detalle del ticket en historial**: al expandir una entrada del historial, cada artículo muestra en línea secundaria el texto exacto del ticket (`ticket_name`) cuando difiere del nombre del catálogo. Ej: "Huevos" + "OUS ECOLOGICS 6 UNITATS". Base para drill-down en métricas futuras (COMPRA-33).
+- **Extras → lista activa**: artículos del ticket que no estaban en la lista se añaden automáticamente como comprados (`checked=TRUE`). El toast refleja "X act. · Y añadidos". Los extras también se registran en `catalog` para alimentar sugerencias futuras.
+
+---
+
 ## [3.2.0] — 2026-06-11
 
 ### Changed (breaking redesign of COMPRA-34 receipt flow)

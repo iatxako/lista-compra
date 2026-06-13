@@ -8,14 +8,23 @@
 
 | Ítem | Estado |
 |------|--------|
-| Código en `main` | ✅ v3.2.0 (commit `450a610`) |
-| Tag git | ✅ `v3.2.0` pusheado |
-| Railway (producción) | ⚠️ **BLOQUEADO** — ver sección abajo |
-| COMPRA-35 | En Review (pendiente de verificar en producción) |
+| Código en `main` | ✅ v3.3.0 (pendiente push) |
+| Tag git | ✅ `v3.3.0` (pendiente push) |
+| Railway (producción) | ✅ Online — v3.2.0 activa |
+| COMPRA-35 | En Review (pendiente validación de usuario) |
+| COMPRA-36 | En Review (pendiente deploy y validación) |
 
 ---
 
-## ⚠️ Incidente: Railway no despliega (2026-06-11)
+## ✅ Incidente Railway resuelto (2026-06-11)
+
+Se forzó redeploy con `railway up --service api`. Railway está online y estable.
+
+---
+
+## Historial de incidentes
+
+### Railway no desplegaba (2026-06-11 — resuelto)
 
 El commit `450a610` fue pusheado a `main` con tag `v3.2.0` pero Railway **no ha arrancado un nuevo build**. Los logs siguen mostrando el arranque de las 20:42 UTC (deployment anterior, COMPRA-34).
 
