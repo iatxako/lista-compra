@@ -10,6 +10,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Planned
 - Metrics dashboard from history + receipt data
 - Store tags: normalize store names to display chips (COMPRA-38)
+- Price intelligence: tracking precio/kg por producto y comparativa tiendas
+- Corrección manual de datos del ticket
+- Smart alerts: sugerencias de reposición por frecuencia
+
+---
+
+## [3.5.0] — 2026-06-13
+
+### Added
+- **Feedback visual del scan**: overlay con spinner mientras Groq procesa el ticket. Al terminar muestra ✅ con tienda + total + artículos actualizados (se cierra solo a los 3s) o ❌ con mensaje de error + botón Cerrar.
+
+### Fixed
+- **Extracción de pesos**: prompt de Groq mejorado con ejemplo real de formato de ticket español. Especifica explícitamente que para artículos de peso variable el formato es "0,206 KG × 11,50€/KG" y que quantity debe ser el peso del envase (0.206), no el precio/kg. Incluye ejemplos de bacalao 150g, leche 1L, huevos 12ud.
 
 ---
 
@@ -167,3 +180,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Initial local NAS version (Python Flask + JSON file storage)
 - Basic checklist UI (vanilla HTML/JS)
 - Telegram bot integration (later removed)
+
+---
+
+## [3.5.0] — 2026-06-13

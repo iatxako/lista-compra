@@ -617,7 +617,7 @@ def api_scan_receipt():
     mime = request.files["receipt"].mimetype or "image/jpeg"
     del img_bytes
 
-    prompt = """Eres un asistente que extrae datos estructurados de tickets de compra.
+    prompt = """Eres un asistente que extrae datos estructurados de tickets de compra españoles.
 Analiza la imagen y devuelve SOLO un JSON válido con esta estructura:
 
 {
@@ -635,13 +635,19 @@ Analiza la imagen y devuelve SOLO un JSON válido con esta estructura:
 }
 
 Reglas:
-- total_amount es el total final pagado (número sin símbolo €)
+- total_amount: total final pagado (columna derecha, última línea de importe)
 - name_raw: copia literal del texto del ticket, sin traducir ni modificar
-- name_es: nombre del producto en castellano. Si el ticket está en catalán, valenciano u otro idioma, DEBES traducirlo al castellano. Si ya está en castellano, repite el mismo valor que name_raw
-- price: importe total pagado por ese artículo, el que aparece en la columna de precios a la derecha del ticket. NUNCA uses precios por unidad de peso (€/kg, €/l, €/ud) que puedan aparecer dentro del nombre del producto — eso no es el price
-- quantity y unit: peso o cantidad impresa junto al artículo en el ticket (ej: 0.206 con unit "kg", o 6 con unit "ud"). Usa el peso real del envase comprado, no el precio/kg. Si no aparece impreso, usa null. NO inventes ni estimes cantidades
-- NUNCA inventes valores numéricos. Si un número no es claramente legible en el ticket, usa null
-- Responde ÚNICAMENTE con el JSON, sin texto adicional"""
+- name_es: nombre en castellano. Si el ticket está en catalán, valenciano u otro idioma, tradúcelo. Si ya está en castellano, repite name_raw
+- price: importe total pagado por ese artículo en la columna derecha del ticket. NUNCA uses el precio por kilo/litro (€/kg, €/l) que aparece junto al nombre — eso NO es el price
+- quantity/unit: para artículos de peso fijo (ej: "BACALAO 150G"), extrae 150 y "g". Para artículos de peso variable, en tickets españoles suele aparecer una línea adicional con el formato "0,206 KG x 11,50 €/KG" — en ese caso quantity=0.206, unit="kg", price=el importe total de la columna derecha (NO 11,50). Si no hay dato de cantidad impreso, usa null. NUNCA inventes ni estimes cantidades
+- Si un número no es claramente legible en el ticket, usa null
+- Responde ÚNICAMENTE con el JSON, sin texto adicional
+
+Ejemplo de extracción correcta:
+Ticket:  "PECHUGA PAVO EXTRA / 0,206 KG x 11,50€/KG  2,37" → price=2.37, quantity=0.206, unit="kg"
+Ticket:  "BACALAO DESALADO 150G  1,89"                    → price=1.89, quantity=150, unit="g"
+Ticket:  "LECHE ENTERA 1L  0,99"                          → price=0.99, quantity=1, unit="l"
+Ticket:  "HUEVOS L 12UD  2,15"                            → price=2.15, quantity=12, unit="ud\""""
 
     try:
         from groq import Groq

@@ -303,11 +303,30 @@
   .history-item-ticket { font-size: 0.72rem; color: var(--muted); font-style: italic; padding-left: 22px; margin-top: 1px; }
   .item-price { font-size: 0.78rem; color: var(--green); font-weight: 600; white-space: nowrap; }
   .header-btn.has-receipts { background: rgba(43,138,62,0.12); color: var(--green); }
+  /* Scan overlay */
+  .scan-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:300; display:none; align-items:center; justify-content:center; }
+  .scan-overlay.active { display:flex; }
+  .scan-card { background:#fff; border-radius:20px; padding:36px 28px; text-align:center; min-width:240px; max-width:300px; }
+  .scan-spinner { width:44px; height:44px; border:3px solid #e9ecef; border-top-color:var(--green); border-radius:50%; animation:spin 0.7s linear infinite; margin:0 auto 16px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .scan-icon { font-size:2.2rem; margin-bottom:10px; }
+  .scan-msg { font-size:0.88rem; color:#333; line-height:1.6; }
+  .scan-msg.ok { color:var(--green); }
+  .scan-msg.ko { color:var(--red); }
+  .scan-close { margin-top:16px; padding:8px 24px; border-radius:20px; background:var(--bg-item); border:none; cursor:pointer; font-size:0.85rem; color:var(--muted); display:none; }
 </style>
 </head>
 <body>
 
 <div class="toast" id="toast"></div>
+<div class="scan-overlay" id="scan-overlay">
+  <div class="scan-card">
+    <div class="scan-spinner" id="scan-spinner"></div>
+    <div class="scan-icon" id="scan-icon" style="display:none"></div>
+    <div class="scan-msg" id="scan-msg">Procesando ticket...</div>
+    <button class="scan-close" id="scan-close" onclick="closeScanOverlay()">Cerrar</button>
+  </div>
+</div>
 <div class="header-actions">
   <button class="header-btn" id="receipt-btn" onclick="openReceiptScan()" aria-label="Escanear ticket">📷</button>
   <button class="header-btn" onclick="openHistory()" aria-label="Ver historial">🕐</button>
@@ -854,13 +873,27 @@ function openReceiptScan() {
   document.getElementById('receipt-file-input').click();
 }
 
+function _scanShow(spinning, icon, msg, msgClass, showClose) {
+  document.getElementById('scan-spinner').style.display = spinning ? 'block' : 'none';
+  const iconEl = document.getElementById('scan-icon');
+  iconEl.style.display = icon ? 'block' : 'none';
+  iconEl.textContent = icon || '';
+  const msgEl = document.getElementById('scan-msg');
+  msgEl.innerHTML = msg;
+  msgEl.className = 'scan-msg' + (msgClass ? ' ' + msgClass : '');
+  document.getElementById('scan-close').style.display = showClose ? 'block' : 'none';
+  document.getElementById('scan-overlay').classList.add('active');
+}
+
+function closeScanOverlay() {
+  document.getElementById('scan-overlay').classList.remove('active');
+}
+
 async function uploadActiveReceipt(input) {
   const file = input.files[0];
   if (!file) return;
-  const btn = document.getElementById('receipt-btn');
-  const origLabel = btn.textContent;
-  btn.textContent = '⏳';
-  btn.disabled = true;
+  input.value = '';
+  _scanShow(true, null, 'Analizando ticket con IA...', '', false);
   try {
     const fd = new FormData();
     fd.append('receipt', file);
@@ -868,25 +901,21 @@ async function uploadActiveReceipt(input) {
     const k = getAPIKey();
     if (k) uploadHeaders['X-API-Key'] = k;
     const res = await fetch(`${getAPI()}/api/receipt`, {
-      method: 'POST',
-      headers: uploadHeaders,
-      body: fd,
+      method: 'POST', headers: uploadHeaders, body: fd,
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
     _receiptCount++;
     _updateReceiptBtn();
-    const storePart = simplifyStore(data.store_name) || 'Ticket procesado';
-    const totalPart = data.total_amount != null ? ` · ${parseFloat(data.total_amount).toFixed(2)} €` : '';
-    const addedPart = data.added_count > 0 ? ` · ${data.added_count} añadidos` : '';
-    toast(`📷 ${storePart}${totalPart} — ${data.matched_count} act.${addedPart}`);
+    const store = simplifyStore(data.store_name) || 'Ticket procesado';
+    const total = data.total_amount != null ? ` · <b>${parseFloat(data.total_amount).toFixed(2)} €</b>` : '';
+    const added = data.added_count > 0 ? `<br><small>+${data.added_count} añadidos a la lista</small>` : '';
+    _scanShow(false, '✅', `${store}${total}<br><small>${data.matched_count} artículos actualizados</small>${added}`, 'ok', false);
+    setTimeout(closeScanOverlay, 3000);
   } catch(e) {
-    btn.textContent = origLabel;
     const msg = e.message && e.message.length < 120 ? e.message : 'No se pudo procesar el ticket';
-    toast(`⚠️ ${msg}`);
+    _scanShow(false, '❌', msg, 'ko', true);
   }
-  btn.disabled = false;
-  input.value = '';
 }
 
 async function resetList() {
