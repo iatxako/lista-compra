@@ -291,9 +291,9 @@
   }
   .history-detail-item:last-child { border-bottom: none; }
   .history-detail-item.done { color: var(--muted); }
-  .history-detail-item.done .history-detail-name { text-decoration: line-through; }
   .history-detail-cat { font-size: 0.9rem; flex-shrink: 0; width: 20px; text-align: center; }
   .history-detail-name { flex: 1; }
+  .history-item-qty { font-size: 0.72rem; color: var(--muted); white-space: nowrap; margin-right: 4px; }
   .history-detail-check { color: var(--green); font-size: 0.8rem; flex-shrink: 0; }
   .history-empty { text-align: center; color: var(--muted); padding: 32px 0; font-size: 0.9rem; }
   .history-store { font-size: 0.8rem; color: var(--blue); font-weight: 600; margin-top: 3px; }
@@ -976,29 +976,27 @@ async function toggleHistoryDetail(el, id) {
 }
 
 function renderHistoryDetail(container, items) {
-  if (!items.length) {
-    container.innerHTML = '<div style="color:var(--muted);font-size:0.82rem;padding:8px 0">Sin artículos</div>';
+  const purchased = items.filter(i => i.checked);
+  if (!purchased.length) {
+    container.innerHTML = '<div style="color:var(--muted);font-size:0.82rem;padding:8px 0">Sin artículos comprados</div>';
     return;
   }
   const catMap = Object.fromEntries(CATEGORIES.map(c => [c.id, c.emoji]));
   const catOrder = Object.fromEntries(CATEGORIES.map((c, i) => [c.id, i]));
   const catRank = item => item.category != null ? (catOrder[item.category] ?? CATEGORIES.length) : CATEGORIES.length;
-  const sorted = [...items].sort((a, b) => {
-    const cd = catRank(a) - catRank(b);
-    if (cd !== 0) return cd;
-    return a.checked === b.checked ? 0 : a.checked ? 1 : -1;
-  });
+  const sorted = [...purchased].sort((a, b) => catRank(a) - catRank(b));
   container.innerHTML = sorted.map(item => {
     const emoji = item.category ? (catMap[item.category] || '') : '';
-    const doneClass = item.checked ? 'done' : '';
-    const check = item.checked ? '<span class="history-detail-check">✓</span>' : '';
+    const qtyHtml = item.quantity != null
+      ? `<span class="history-item-qty">${parseFloat(item.quantity) % 1 === 0 ? parseInt(item.quantity) : parseFloat(item.quantity)}${item.unit ? ' ' + item.unit : ''}</span>`
+      : '';
     const priceHtml = item.price != null ? `<span class="history-item-price">${parseFloat(item.price).toFixed(2)} €</span>` : '';
     const storeHtml = item.store_name ? `<span class="history-item-store">${simplifyStore(item.store_name)}</span>` : '';
-    return `<div class="history-detail-item ${doneClass}">
+    return `<div class="history-detail-item">
       <div style="display:flex;align-items:center;width:100%">
         <span class="history-detail-cat">${emoji}</span>
-        <span class="history-detail-name">${item.name}</span>
-        ${priceHtml}${storeHtml}${check}
+        <span class="history-detail-name">${escapeHtml(item.name)}</span>
+        ${qtyHtml}${priceHtml}${storeHtml}
       </div>
     </div>`;
   }).join('');

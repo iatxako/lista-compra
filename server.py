@@ -638,8 +638,8 @@ Reglas:
 - total_amount es el total final pagado (número sin símbolo €)
 - name_raw: copia literal del texto del ticket, sin traducir ni modificar
 - name_es: nombre del producto en castellano. Si el ticket está en catalán, valenciano u otro idioma, DEBES traducirlo al castellano. Si ya está en castellano, repite el mismo valor que name_raw
-- price: precio que aparece impreso junto al artículo en el ticket. Si no está claramente visible, usa null
-- quantity y unit: peso o cantidad impresa en el ticket (ej: 0.206 con unit "kg", o 6 con unit "ud"). Si no aparece impreso, usa null. NO inventes ni estimes cantidades
+- price: importe total pagado por ese artículo, el que aparece en la columna de precios a la derecha del ticket. NUNCA uses precios por unidad de peso (€/kg, €/l, €/ud) que puedan aparecer dentro del nombre del producto — eso no es el price
+- quantity y unit: peso o cantidad impresa junto al artículo en el ticket (ej: 0.206 con unit "kg", o 6 con unit "ud"). Usa el peso real del envase comprado, no el precio/kg. Si no aparece impreso, usa null. NO inventes ni estimes cantidades
 - NUNCA inventes valores numéricos. Si un número no es claramente legible en el ticket, usa null
 - Responde ÚNICAMENTE con el JSON, sin texto adicional"""
 

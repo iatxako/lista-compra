@@ -13,6 +13,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.4.2] — 2026-06-13
+
+### Fixed (feedback post-test v3.4.1)
+- **Precio confundido con €/kg del nombre**: el prompt de Groq ahora especifica que `price` es el importe de la columna derecha del ticket, nunca el precio por unidad de peso que pueda aparecer dentro del nombre del artículo.
+- **Historial muestra solo artículos comprados**: `renderHistoryDetail()` filtra a `checked === true`. Los artículos que estaban en la lista pero no se compraron no aparecen en el historial (siguen guardados en `items_json` para métricas futuras, COMPRA-33). El dato tiene valor analítico pero no aporta claridad visual en esta fase.
+- **Orden en historial**: nombre → cantidad/peso → precio → tienda. Añadido campo `quantity+unit` en la visualización.
+- **Tachado eliminado del historial**: se elimina la clase `done` y el tachado — todos los items mostrados son comprados, el tachado es redundante.
+
+---
+
 ## [3.4.1] — 2026-06-13
 
 ### Fixed (feedback post-COMPRA-37)
