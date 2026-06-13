@@ -763,6 +763,60 @@ Ticket:  "HUEVOS L 12UD  2,15"                            → price=2.15, quanti
     })
 
 
+@app.route("/api/metrics")
+@require_api_key
+def api_metrics():
+    if not DATABASE_URL:
+        return jsonify({"error": "no database"}), 500
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("SELECT saved_at, total_amount, items_json FROM history ORDER BY saved_at ASC")
+        rows = [dict(r) for r in cur.fetchall()]
+        cur.close()
+        conn.close()
+
+        total_spent = 0.0
+        by_category: dict = {}
+        by_item: dict = {}
+        monthly: dict = {}
+
+        for row in rows:
+            if row["total_amount"]:
+                total_spent += float(row["total_amount"])
+            month_key = row["saved_at"].strftime("%Y-%m") if row["saved_at"] else None
+            if month_key and row["total_amount"]:
+                monthly[month_key] = monthly.get(month_key, 0.0) + float(row["total_amount"])
+            for item in (row["items_json"] or []):
+                if not item.get("checked") or item.get("price") is None:
+                    continue
+                price = float(item["price"])
+                cat = item.get("category") or "otros"
+                name = item.get("name", "")
+                by_category[cat] = by_category.get(cat, 0.0) + price
+                if name:
+                    e = by_item.setdefault(name, {"total": 0.0, "count": 0})
+                    e["total"] += price
+                    e["count"] += 1
+
+        purchase_count = len(rows)
+        avg = round(total_spent / purchase_count, 2) if purchase_count else 0.0
+
+        return jsonify({
+            "total_spent": round(total_spent, 2),
+            "purchase_count": purchase_count,
+            "avg_per_purchase": avg,
+            "by_category": [{"id": k, "total": round(v, 2)}
+                            for k, v in sorted(by_category.items(), key=lambda x: -x[1])],
+            "top_items": [{"name": k, "total": round(v["total"], 2), "count": v["count"]}
+                         for k, v in sorted(by_item.items(), key=lambda x: -x[1]["total"])[:8]],
+            "monthly": [{"month": k, "total": round(v, 2)} for k, v in sorted(monthly.items())[-6:]],
+        })
+    except Exception as e:
+        log.error("Error computing metrics: %s", e)
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/history/<int:history_id>/item", methods=["PATCH"])
 @require_api_key
 def api_history_item_patch(history_id):

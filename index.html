@@ -240,6 +240,59 @@
   .cat-option-emoji { font-size: 1.7rem; }
   .cat-option-label { font-size: 0.68rem; font-weight: 600; text-align: center; color: var(--muted); line-height: 1.2; }
 
+  /* Metrics panel */
+  .metrics-panel {
+    position: fixed; inset: 0; z-index: 200;
+    display: none; flex-direction: column; justify-content: flex-end;
+  }
+  .metrics-panel.open { display: flex; }
+  .metrics-backdrop { flex: 1; background: rgba(0,0,0,0.45); }
+  .metrics-sheet {
+    background: var(--card);
+    border-radius: 20px 20px 0 0;
+    padding: 20px 16px max(20px, env(safe-area-inset-bottom));
+    max-height: 82vh; overflow-y: auto;
+  }
+  .metrics-sheet-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 20px;
+  }
+  .metrics-sheet-title { font-weight: 700; font-size: 1rem; }
+  .metrics-close-btn {
+    background: none; border: none; width: 36px; height: 36px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1rem; color: var(--muted); cursor: pointer; border-radius: 8px;
+  }
+  .metrics-cards {
+    display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 24px;
+  }
+  .metrics-card {
+    background: var(--bg); border-radius: 12px; padding: 12px 10px; text-align: center;
+  }
+  .metrics-card-value { font-size: 1.1rem; font-weight: 700; color: var(--green); }
+  .metrics-card-label { font-size: 0.68rem; color: var(--muted); margin-top: 3px; text-transform: uppercase; letter-spacing: .04em; }
+  .metrics-section-title {
+    font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--muted); margin-bottom: 12px; margin-top: 20px;
+  }
+  .metrics-bar-row {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 0.85rem;
+  }
+  .metrics-bar-label { width: 130px; flex-shrink: 0; display: flex; align-items: center; gap: 5px; overflow: hidden; white-space: nowrap; }
+  .metrics-bar-track { flex: 1; background: var(--border); border-radius: 4px; height: 6px; overflow: hidden; }
+  .metrics-bar-fill { height: 6px; border-radius: 4px; background: var(--green); transition: width .4s ease; }
+  .metrics-bar-fill.blue { background: var(--blue); }
+  .metrics-bar-value { font-size: 0.78rem; color: var(--muted); white-space: nowrap; min-width: 48px; text-align: right; }
+  .metrics-empty { text-align: center; color: var(--muted); padding: 32px 0; font-size: 0.9rem; }
+  .metrics-item-row {
+    display: flex; align-items: center; padding: 8px 0;
+    border-bottom: 1px solid var(--border); font-size: 0.88rem; gap: 8px;
+  }
+  .metrics-item-row:last-child { border-bottom: none; }
+  .metrics-item-name { flex: 1; }
+  .metrics-item-count { font-size: 0.75rem; color: var(--muted); }
+  .metrics-item-total { font-weight: 600; color: var(--green); }
+
   /* History panel */
   .history-panel {
     position: fixed; inset: 0; z-index: 200;
@@ -374,8 +427,19 @@
     </div>
   </div>
 </div>
+<div class="metrics-panel" id="metrics-panel">
+  <div class="metrics-backdrop" onclick="closeMetrics()"></div>
+  <div class="metrics-sheet" id="metrics-sheet">
+    <div class="metrics-sheet-header">
+      <span class="metrics-sheet-title">📊 Métricas</span>
+      <button class="metrics-close-btn" onclick="closeMetrics()">✕</button>
+    </div>
+    <div id="metrics-content"><div class="metrics-empty">Cargando...</div></div>
+  </div>
+</div>
 <div class="header-actions">
   <button class="header-btn" id="receipt-btn" onclick="openReceiptScan()" aria-label="Escanear ticket">📷</button>
+  <button class="header-btn" onclick="openMetrics()" aria-label="Ver métricas">📊</button>
   <button class="header-btn" onclick="openHistory()" aria-label="Ver historial">🕐</button>
   <button class="header-btn" onclick="resetList()" aria-label="Vaciar lista">🗑️</button>
 </div>
@@ -1131,6 +1195,95 @@ async function saveHistoryEdit() {
   } catch(e) {
     toast('Error al guardar');
   }
+}
+
+// ── Metrics ───────────────────────────────────────────────────────
+async function openMetrics() {
+  document.getElementById('metrics-panel').classList.add('open');
+  const content = document.getElementById('metrics-content');
+  content.innerHTML = '<div class="metrics-empty">Cargando...</div>';
+  try {
+    const res = await fetch(`${getAPI()}/api/metrics`, { headers: apiHeaders() });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    renderMetrics(await res.json());
+  } catch(e) {
+    content.innerHTML = '<div class="metrics-empty">Error al cargar métricas</div>';
+  }
+}
+
+function closeMetrics() {
+  document.getElementById('metrics-panel').classList.remove('open');
+}
+
+function renderMetrics(d) {
+  const content = document.getElementById('metrics-content');
+  if (!d.purchase_count) {
+    content.innerHTML = '<div class="metrics-empty">Aún no hay datos.<br>Completa tu primera compra para ver métricas.</div>';
+    return;
+  }
+
+  // Category labels from CATEGORIES array
+  const catInfo = Object.fromEntries(CATEGORIES.map(c => [c.id, c]));
+
+  // ── Summary cards ──
+  let html = `<div class="metrics-cards">
+    <div class="metrics-card">
+      <div class="metrics-card-value">${d.total_spent.toFixed(2)} €</div>
+      <div class="metrics-card-label">Total gastado</div>
+    </div>
+    <div class="metrics-card">
+      <div class="metrics-card-value">${d.purchase_count}</div>
+      <div class="metrics-card-label">Compras</div>
+    </div>
+    <div class="metrics-card">
+      <div class="metrics-card-value">${d.avg_per_purchase.toFixed(2)} €</div>
+      <div class="metrics-card-label">Media/compra</div>
+    </div>
+  </div>`;
+
+  // ── By category ──
+  if (d.by_category.length) {
+    const maxCat = Math.max(...d.by_category.map(c => c.total));
+    html += `<div class="metrics-section-title">Gasto por categoría</div>`;
+    d.by_category.forEach(c => {
+      const info = catInfo[c.id] || { emoji: '🛒', label: c.id };
+      const pct = Math.round(c.total / maxCat * 100);
+      html += `<div class="metrics-bar-row">
+        <div class="metrics-bar-label"><span>${info.emoji}</span><span>${info.label}</span></div>
+        <div class="metrics-bar-track"><div class="metrics-bar-fill" style="width:${pct}%"></div></div>
+        <div class="metrics-bar-value">${c.total.toFixed(2)} €</div>
+      </div>`;
+    });
+  }
+
+  // ── Monthly evolution ──
+  if (d.monthly.length > 1) {
+    const maxMonth = Math.max(...d.monthly.map(m => m.total));
+    const monthFmt = k => { const [y,m] = k.split('-'); return new Date(y,m-1).toLocaleDateString('es-ES',{month:'short',year:'2-digit'}); };
+    html += `<div class="metrics-section-title">Evolución mensual</div>`;
+    d.monthly.forEach(m => {
+      const pct = Math.round(m.total / maxMonth * 100);
+      html += `<div class="metrics-bar-row">
+        <div class="metrics-bar-label" style="width:60px;font-size:0.78rem">${monthFmt(m.month)}</div>
+        <div class="metrics-bar-track"><div class="metrics-bar-fill blue" style="width:${pct}%"></div></div>
+        <div class="metrics-bar-value">${m.total.toFixed(2)} €</div>
+      </div>`;
+    });
+  }
+
+  // ── Top items ──
+  if (d.top_items.length) {
+    html += `<div class="metrics-section-title">Artículos más comprados</div>`;
+    d.top_items.forEach(item => {
+      html += `<div class="metrics-item-row">
+        <span class="metrics-item-name">${escapeHtml(item.name)}</span>
+        <span class="metrics-item-count">${item.count}x</span>
+        <span class="metrics-item-total">${item.total.toFixed(2)} €</span>
+      </div>`;
+    });
+  }
+
+  content.innerHTML = html;
 }
 
 // ── Keyboard shortcut ─────────────────────────────────────────────
