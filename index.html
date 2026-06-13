@@ -296,10 +296,26 @@
   .history-item-qty { font-size: 0.72rem; color: var(--muted); white-space: nowrap; margin-right: 4px; }
   .history-detail-check { color: var(--green); font-size: 0.8rem; flex-shrink: 0; }
   .history-empty { text-align: center; color: var(--muted); padding: 32px 0; font-size: 0.9rem; }
-  .history-store { font-size: 0.8rem; color: var(--blue); font-weight: 600; margin-top: 3px; }
+  .history-store { font-size: 0.8rem; margin-top: 4px; }
   .history-total { font-size: 0.8rem; color: var(--green); font-weight: 600; }
   .history-item-price { font-size: 0.78rem; color: var(--green); font-weight: 600; margin-left: auto; margin-right: 4px; white-space: nowrap; }
-  .history-item-store { font-size: 0.72rem; color: var(--muted); margin-right: 4px; white-space: nowrap; }
+  .store-tag { display:inline-block; background:rgba(51,102,204,0.1); color:var(--blue); border-radius:8px; padding:1px 8px; font-size:0.7rem; font-weight:600; white-space:nowrap; }
+  .history-detail-item { cursor:pointer; }
+  .history-detail-item:active { background:rgba(0,0,0,0.04); }
+  /* Edit overlay */
+  .edit-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:400; display:none; align-items:flex-end; justify-content:center; }
+  .edit-overlay.active { display:flex; }
+  .edit-card { background:#fff; border-radius:20px 20px 0 0; padding:24px 20px 36px; width:100%; max-width:480px; }
+  .edit-title { font-size:0.8rem; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:4px; }
+  .edit-name { font-weight:600; font-size:1rem; margin-bottom:20px; }
+  .edit-row { display:flex; gap:12px; margin-bottom:16px; }
+  .edit-field { flex:1; display:flex; flex-direction:column; gap:4px; }
+  .edit-field label { font-size:0.75rem; color:var(--muted); }
+  .edit-field input, .edit-field select { border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:0.95rem; width:100%; box-sizing:border-box; }
+  .edit-btns { display:flex; gap:10px; margin-top:20px; }
+  .edit-btns button { flex:1; padding:12px; border-radius:12px; border:none; font-size:0.95rem; cursor:pointer; }
+  .edit-btns .btn-cancel { background:var(--bg-item); color:var(--muted); }
+  .edit-btns .btn-save { background:var(--green); color:#fff; font-weight:600; }
   .history-item-ticket { font-size: 0.72rem; color: var(--muted); font-style: italic; padding-left: 22px; margin-top: 1px; }
   .item-price { font-size: 0.78rem; color: var(--green); font-weight: 600; white-space: nowrap; }
   .header-btn.has-receipts { background: rgba(43,138,62,0.12); color: var(--green); }
@@ -325,6 +341,37 @@
     <div class="scan-icon" id="scan-icon" style="display:none"></div>
     <div class="scan-msg" id="scan-msg">Procesando ticket...</div>
     <button class="scan-close" id="scan-close" onclick="closeScanOverlay()">Cerrar</button>
+  </div>
+</div>
+<div class="edit-overlay" id="edit-overlay">
+  <div class="edit-card">
+    <div class="edit-title">Editar artículo</div>
+    <div class="edit-name" id="edit-name"></div>
+    <div class="edit-row">
+      <div class="edit-field">
+        <label>Precio (€)</label>
+        <input type="number" id="edit-price" step="0.01" min="0" placeholder="—">
+      </div>
+      <div class="edit-field">
+        <label>Cantidad</label>
+        <input type="number" id="edit-qty" step="any" min="0" placeholder="—">
+      </div>
+      <div class="edit-field" style="max-width:80px">
+        <label>Unidad</label>
+        <select id="edit-unit">
+          <option value="">—</option>
+          <option value="ud">ud</option>
+          <option value="kg">kg</option>
+          <option value="g">g</option>
+          <option value="l">l</option>
+          <option value="ml">ml</option>
+        </select>
+      </div>
+    </div>
+    <div class="edit-btns">
+      <button class="btn-cancel" onclick="cancelHistoryEdit()">Cancelar</button>
+      <button class="btn-save" onclick="saveHistoryEdit()">Guardar</button>
+    </div>
   </div>
 </div>
 <div class="header-actions">
@@ -963,9 +1010,9 @@ function renderHistory(entries) {
     const pct = e.item_count > 0 ? Math.round(e.checked_count / e.item_count * 100) : 0;
     const arts = e.item_count === 1 ? 'artículo' : 'artículos';
     const comp = e.checked_count === 1 ? 'comprado' : 'comprados';
-    const storeHtml = e.store_name ? `<div class="history-store">🏪 ${simplifyStore(e.store_name)}</div>` : '';
+    const storeHtml = e.store_name ? `<div class="history-store"><span class="store-tag">${simplifyStore(e.store_name)}</span></div>` : '';
     const totalHtml = e.total_amount != null ? `<span class="history-total"> · ${parseFloat(e.total_amount).toFixed(2)} €</span>` : '';
-    return `<div class="history-entry" onclick="toggleHistoryDetail(this, ${e.id})">
+    return `<div class="history-entry" data-history-id="${e.id}" onclick="toggleHistoryDetail(this, ${e.id})">
       <div class="history-entry-header">
         <div class="history-entry-meta">
           <div class="history-date">${dateStr}</div>
@@ -980,6 +1027,8 @@ function renderHistory(entries) {
   }).join('');
 }
 
+
+const _historyCache = {};
 
 async function toggleHistoryDetail(el, id) {
   const detail = el.querySelector('.history-detail');
@@ -997,14 +1046,15 @@ async function toggleHistoryDetail(el, id) {
     const res = await fetch(`${getAPI()}/api/history/${id}`, { headers: apiHeaders() });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    renderHistoryDetail(detail, data.items || []);
+    _historyCache[id] = data.items || [];
+    renderHistoryDetail(detail, id, data.items || []);
     detail.dataset.loaded = '1';
   } catch(e) {
     detail.innerHTML = '<div style="color:var(--red);font-size:0.82rem;padding:8px 0">Error al cargar</div>';
   }
 }
 
-function renderHistoryDetail(container, items) {
+function renderHistoryDetail(container, historyId, items) {
   const purchased = items.filter(i => i.checked);
   if (!purchased.length) {
     container.innerHTML = '<div style="color:var(--muted);font-size:0.82rem;padding:8px 0">Sin artículos comprados</div>';
@@ -1020,8 +1070,9 @@ function renderHistoryDetail(container, items) {
       ? `<span class="history-item-qty">${parseFloat(item.quantity) % 1 === 0 ? parseInt(item.quantity) : parseFloat(item.quantity)}${item.unit ? ' ' + item.unit : ''}</span>`
       : '';
     const priceHtml = item.price != null ? `<span class="history-item-price">${parseFloat(item.price).toFixed(2)} €</span>` : '';
-    const storeHtml = item.store_name ? `<span class="history-item-store">${simplifyStore(item.store_name)}</span>` : '';
-    return `<div class="history-detail-item">
+    const storeHtml = item.store_name ? `<span class="store-tag" style="margin-left:4px">${simplifyStore(item.store_name)}</span>` : '';
+    const nameEsc = escapeHtml(item.name).replace(/'/g, "\\'");
+    return `<div class="history-detail-item" onclick="openHistoryItemEdit(${historyId},'${nameEsc}')">
       <div style="display:flex;align-items:center;width:100%">
         <span class="history-detail-cat">${emoji}</span>
         <span class="history-detail-name">${escapeHtml(item.name)}</span>
@@ -1029,6 +1080,57 @@ function renderHistoryDetail(container, items) {
       </div>
     </div>`;
   }).join('');
+}
+
+// ── History item edit ─────────────────────────────────────────────
+let _editHistoryId = null, _editItemName = null;
+
+function openHistoryItemEdit(historyId, itemName) {
+  const items = _historyCache[historyId] || [];
+  const item = items.find(i => i.name === itemName);
+  if (!item) return;
+  _editHistoryId = historyId;
+  _editItemName = itemName;
+  document.getElementById('edit-name').textContent = itemName;
+  document.getElementById('edit-price').value = item.price != null ? parseFloat(item.price).toFixed(2) : '';
+  document.getElementById('edit-qty').value = item.quantity != null ? parseFloat(item.quantity) : '';
+  document.getElementById('edit-unit').value = item.unit || '';
+  document.getElementById('edit-overlay').classList.add('active');
+}
+
+function cancelHistoryEdit() {
+  document.getElementById('edit-overlay').classList.remove('active');
+}
+
+async function saveHistoryEdit() {
+  const price = document.getElementById('edit-price').value;
+  const qty   = document.getElementById('edit-qty').value;
+  const unit  = document.getElementById('edit-unit').value;
+  try {
+    const res = await fetch(`${getAPI()}/api/history/${_editHistoryId}/item`, {
+      method: 'PATCH', headers: apiHeaders(),
+      body: JSON.stringify({
+        name: _editItemName,
+        price: price !== '' ? parseFloat(price) : null,
+        quantity: qty !== '' ? parseFloat(qty) : null,
+        unit: unit || null,
+      })
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    // Reload detail
+    const res2 = await fetch(`${getAPI()}/api/history/${_editHistoryId}`, { headers: apiHeaders() });
+    const data = await res2.json();
+    _historyCache[_editHistoryId] = data.items || [];
+    const entryEl = document.querySelector(`.history-entry[data-history-id="${_editHistoryId}"]`);
+    if (entryEl) {
+      const detail = entryEl.querySelector('.history-detail');
+      renderHistoryDetail(detail, _editHistoryId, data.items || []);
+    }
+    cancelHistoryEdit();
+    toast('Guardado');
+  } catch(e) {
+    toast('Error al guardar');
+  }
 }
 
 // ── Keyboard shortcut ─────────────────────────────────────────────

@@ -638,7 +638,7 @@ Reglas:
 - total_amount: total final pagado (columna derecha, última línea de importe)
 - name_raw: copia literal del texto del ticket, sin traducir ni modificar
 - name_es: nombre en castellano. Si el ticket está en catalán, valenciano u otro idioma, tradúcelo. Si ya está en castellano, repite name_raw
-- price: importe total pagado por ese artículo en la columna derecha del ticket. NUNCA uses el precio por kilo/litro (€/kg, €/l) que aparece junto al nombre — eso NO es el price
+- price: importe total pagado por ese artículo en la columna derecha del ticket. NUNCA uses el precio por kilo/litro (€/kg, €/l) que aparece junto al nombre — eso NO es el price. Alinea cada precio EXACTAMENTE con la fila del artículo: no uses el precio de una fila adyacente
 - quantity/unit: para artículos de peso fijo (ej: "BACALAO 150G"), extrae 150 y "g". Para artículos de peso variable, en tickets españoles suele aparecer una línea adicional con el formato "0,206 KG x 11,50 €/KG" — en ese caso quantity=0.206, unit="kg", price=el importe total de la columna derecha (NO 11,50). Si no hay dato de cantidad impreso, usa null. NUNCA inventes ni estimes cantidades
 - Si un número no es claramente legible en el ticket, usa null
 - Responde ÚNICAMENTE con el JSON, sin texto adicional
@@ -761,6 +761,40 @@ Ticket:  "HUEVOS L 12UD  2,15"                            → price=2.15, quanti
         "matched_count": matched_count,
         "added_count": added_count,
     })
+
+
+@app.route("/api/history/<int:history_id>/item", methods=["PATCH"])
+@require_api_key
+def api_history_item_patch(history_id):
+    body = request.get_json(silent=True) or {}
+    item_name = body.get("name")
+    if not item_name:
+        return jsonify({"error": "name required"}), 400
+    price = body.get("price")
+    quantity = body.get("quantity")
+    unit = body.get("unit") or None
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("""
+            UPDATE history
+            SET items_json = (
+                SELECT jsonb_agg(
+                    CASE WHEN elem->>'name' = %s
+                    THEN elem || jsonb_build_object('price', %s, 'quantity', %s, 'unit', %s)
+                    ELSE elem END
+                )
+                FROM jsonb_array_elements(items_json) elem
+            )
+            WHERE id = %s
+        """, (item_name, price, quantity, unit, history_id))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({"ok": True})
+    except Exception as e:
+        log.error("Error patching history item: %s", e)
+        return jsonify({"error": str(e)}), 500
 
 
 # ── Serve frontend ──────────────────────────────────────────────────

@@ -16,6 +16,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.6.0] — 2026-06-13
+
+### Added (COMPRA-41, COMPRA-38)
+- **Edición manual de artículos del historial (COMPRA-41)**: toca cualquier artículo en el detalle del historial para editar precio, cantidad y unidad. Los datos corregidos se guardan en PostgreSQL y el detalle se refresca automáticamente.
+- **Store tags como pills (COMPRA-38 parcial)**: los nombres de tienda se muestran como chips con fondo azul claro, tanto en cabeceras del historial como junto a cada artículo.
+
+### Fixed
+- Prompt Groq: instrucción explícita de alinear precio con su propia fila (no con la adyacente).
+- Nuevo endpoint `PATCH /api/history/<id>/item` para actualizar precio/cantidad/unidad de un artículo del historial.
+
+---
+
 ## [3.5.0] — 2026-06-13
 
 ### Added
