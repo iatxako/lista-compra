@@ -711,6 +711,18 @@ function escapeHtml(text) {
   return d.innerHTML;
 }
 
+function simplifyStore(name) {
+  if (!name) return '';
+  if (name.includes(' + ')) return name.split(' + ').map(simplifyStore).join(' + ');
+  const SKIP = new Set(['grupo', 'centro', 'super', 'supermercado', 'hipermercado',
+    'comercial', 'tienda', 'sl', 'sa', 'slu', 'srl', 'ltd', 'llc']);
+  for (const w of name.trim().split(/\s+/)) {
+    if (!SKIP.has(w.toLowerCase().replace(/[.,]/g, '')))
+      return w.charAt(0).toUpperCase() + w.slice(1);
+  }
+  return name;
+}
+
 // ── Category picker ───────────────────────────────────────────────
 let _pickerIdx = null;
 
@@ -864,7 +876,7 @@ async function uploadActiveReceipt(input) {
     if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
     _receiptCount++;
     _updateReceiptBtn();
-    const storePart = data.store_name || 'Ticket procesado';
+    const storePart = simplifyStore(data.store_name) || 'Ticket procesado';
     const totalPart = data.total_amount != null ? ` · ${parseFloat(data.total_amount).toFixed(2)} €` : '';
     const addedPart = data.added_count > 0 ? ` · ${data.added_count} añadidos` : '';
     toast(`📷 ${storePart}${totalPart} — ${data.matched_count} act.${addedPart}`);
@@ -922,7 +934,7 @@ function renderHistory(entries) {
     const pct = e.item_count > 0 ? Math.round(e.checked_count / e.item_count * 100) : 0;
     const arts = e.item_count === 1 ? 'artículo' : 'artículos';
     const comp = e.checked_count === 1 ? 'comprado' : 'comprados';
-    const storeHtml = e.store_name ? `<div class="history-store">🏪 ${e.store_name}</div>` : '';
+    const storeHtml = e.store_name ? `<div class="history-store">🏪 ${simplifyStore(e.store_name)}</div>` : '';
     const totalHtml = e.total_amount != null ? `<span class="history-total"> · ${parseFloat(e.total_amount).toFixed(2)} €</span>` : '';
     return `<div class="history-entry" onclick="toggleHistoryDetail(this, ${e.id})">
       <div class="history-entry-header">
@@ -981,7 +993,7 @@ function renderHistoryDetail(container, items) {
     const doneClass = item.checked ? 'done' : '';
     const check = item.checked ? '<span class="history-detail-check">✓</span>' : '';
     const priceHtml = item.price != null ? `<span class="history-item-price">${parseFloat(item.price).toFixed(2)} €</span>` : '';
-    const storeHtml = item.store_name ? `<span class="history-item-store">${item.store_name}</span>` : '';
+    const storeHtml = item.store_name ? `<span class="history-item-store">${simplifyStore(item.store_name)}</span>` : '';
     return `<div class="history-detail-item ${doneClass}">
       <div style="display:flex;align-items:center;width:100%">
         <span class="history-detail-cat">${emoji}</span>

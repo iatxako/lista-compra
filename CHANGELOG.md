@@ -13,6 +13,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [3.4.1] — 2026-06-13
+
+### Fixed (feedback post-COMPRA-37)
+- **Sugerencias genéricas restauradas**: eliminado el bloque de rename de nombre que renombaba `catalog` al texto del ticket (ej: "pechuga de pavo extra 150gr" sobreescribía "pavo"). El nombre del ítem en la lista sigue siendo el que puso el usuario; el detalle del ticket queda en `ticket_name`.
+- **Precios y pesos ya no se inventan**: el prompt de Groq incluye ahora instrucción explícita de no estimar ni inventar valores numéricos — si un precio, peso o cantidad no es claramente legible en el ticket, Groq debe devolver `null`.
+- **Tag de tienda simplificado**: nueva función `simplifyStore()` en el frontend extrae la primera palabra significativa del nombre de la tienda (descartando "Grupo", "SL", "SA", etc.). Ej: "Vidania Gastronomia SL" → "Vidania", "Grupo Dia Lorca" → "Dia". Se aplica en historial, detalle de historial y toast del scan. El nombre completo se sigue almacenando en DB.
+
+---
+
 ## [3.4.0] — 2026-06-13
 
 ### Changed (COMPRA-37 — refinamientos scan ticket)

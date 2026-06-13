@@ -638,7 +638,9 @@ Reglas:
 - total_amount es el total final pagado (número sin símbolo €)
 - name_raw: copia literal del texto del ticket, sin traducir ni modificar
 - name_es: nombre del producto en castellano. Si el ticket está en catalán, valenciano u otro idioma, DEBES traducirlo al castellano. Si ya está en castellano, repite el mismo valor que name_raw
-- Si no puedes leer un campo, ponlo a null
+- price: precio que aparece impreso junto al artículo en el ticket. Si no está claramente visible, usa null
+- quantity y unit: peso o cantidad impresa en el ticket (ej: 0.206 con unit "kg", o 6 con unit "ud"). Si no aparece impreso, usa null. NO inventes ni estimes cantidades
+- NUNCA inventes valores numéricos. Si un número no es claramente legible en el ticket, usa null
 - Responde ÚNICAMENTE con el JSON, sin texto adicional"""
 
     try:
@@ -709,19 +711,6 @@ Reglas:
                     matched_name,
                 ))
                 matched_count += 1
-                # Enrich item name if the ticket version is more specific
-                name_es_clean = (t_item.get("name_es") or "").strip().capitalize()
-                if name_es_clean and name_es_clean != matched_name:
-                    norm_matched = _normalize(matched_name)
-                    norm_new = _normalize(name_es_clean)
-                    if norm_matched and norm_matched in norm_new and len(name_es_clean) > len(matched_name):
-                        cur.execute("SELECT 1 FROM items WHERE name = %s", (name_es_clean,))
-                        if not cur.fetchone():
-                            cur.execute("UPDATE items SET name = %s WHERE name = %s", (name_es_clean, matched_name))
-                            cur.execute("UPDATE catalog SET name = %s WHERE name = %s", (name_es_clean, matched_name))
-                            for ai in active_items:
-                                if ai['name'] == matched_name:
-                                    ai['name'] = name_es_clean
             else:
                 # Extra: not in the list — add it as a checked (bought) item
                 item_name = (t_item.get("name_es") or name_raw).strip().capitalize()
